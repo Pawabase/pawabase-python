@@ -344,6 +344,10 @@ class AsyncPawabase(_Base):
         if not self._borrowed:
             await self._client.aclose()
 
+    async def download(self, path: str, *, params: Mapping[str, Any] | None = None) -> httpx.Response:
+        """``GET`` a path or URL and hand back the raw response (bytes, headers, status), whatever the status: for files, images and signed storage URLs."""
+        return await self._client.get(path, params=params, headers=self._extra or None)
+
     async def __aenter__(self) -> AsyncPawabase:
         return self
 
