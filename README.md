@@ -1,6 +1,6 @@
 # pawabase
 
-The Python kit for [Pawabase](https://github.com/sillohq/pawabase): write custom **functions** in your own repository, test them without a server, **deploy** them with an API
+The Python kit for [Pawabase](https://github.com/Pawabase/pawabase): write custom **functions** in your own repository, test them without a server, **deploy** them with an API
 key, and **emulate** them on your machine against a real deployment. It also contains a small client for calling a project from scripts and servers.
 
 It needs only `httpx` and Python 3.11+. It talks to a deployment through its public API and contains no server code.
@@ -86,16 +86,16 @@ with Pawabase("https://api.example.com", "pb_sk_...", project="my-project", envi
 
 ## Documentation
 
-- Writing functions: [`apps/docs/code/functions.mdx`](https://github.com/sillohq/pawabase/blob/main/apps/docs/code/functions.mdx)
-- The command line, deploying, emulating: [`apps/docs/code/cli.mdx`](https://github.com/sillohq/pawabase/blob/main/apps/docs/code/cli.mdx)
+- Writing functions: [`code/functions.mdx`](https://github.com/Pawabase/pawabase-docs/blob/main/code/functions.mdx)
+- The command line, deploying, emulating: [`code/cli.mdx`](https://github.com/Pawabase/pawabase-docs/blob/main/code/cli.mdx)
 
 ## Develop
 
 ```bash
-git clone https://github.com/sillohq/pawabase && cd pawabase
-pip install -e sdk/python[test]      # editable install of this package
-python -m pytest tests/test_kit_*.py
-cd sdk/python && python -m build     # wheel and sdist into dist/
+git clone https://github.com/Pawabase/pawabase-python && cd pawabase-python
+pip install -e .[test]               # editable install
+python -m pytest
+uv build                             # wheel and sdist into dist/
 ```
 
 BSD 3-Clause licensed.

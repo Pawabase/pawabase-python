@@ -35,12 +35,10 @@ test = ["pytest>=8", "pytest-asyncio>=0.25"]
 pawabase = "pawabase.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/sillohq/pawabase"
-Documentation = "https://github.com/sillohq/pawabase/tree/main/apps/docs"
-Issues = "https://github.com/sillohq/pawabase/issues"
+Homepage = "https://github.com/Pawabase/pawabase-python"
+Documentation = "https://github.com/Pawabase/pawabase-docs"
+Issues = "https://github.com/Pawabase/pawabase-python/issues"
 
-# `pawabase/` here is a symbolic link to the repository's top-level `pawabase/` folder (the platform's own services import the package from there), so the
-# source exists once and this distribution builds from it.
 [tool.hatch.version]
 path = "pawabase/__init__.py"
 
@@ -48,5 +46,13 @@ path = "pawabase/__init__.py"
 packages = ["pawabase"]
 
 [tool.hatch.build.targets.sdist]
-include = ["pawabase", "README.md", "LICENSE", "CHANGELOG.md", "pyproject.toml"]
+include = ["pawabase", "tests", "README.md", "LICENSE", "CHANGELOG.md", "pyproject.toml"]
 exclude = ["**/__pycache__", "**/*.pyc"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 160
+target-version = "py311"
