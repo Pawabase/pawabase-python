@@ -77,3 +77,15 @@ def test_symlinks_are_never_followed_out_of_the_project(tmp_path):
     packed = bundle.build(root)
     assert "functions/link.txt" not in bundle.read(packed.archive)
     assert any("symbolic link" in s for s in packed.skipped)
+
+
+def test_requirements_travel_with_the_functions_and_must_be_plain(tmp_path):
+    root = project(tmp_path, {**BASE, "functions/requirements.txt": "Pillow>=10.3  # images\n# a comment\nhttpx\n"})
+    packed = bundle.build(root)
+    assert packed.requirements == ["Pillow>=10.3", "httpx"]
+    assert b"Pillow" in bundle.read(packed.archive)["functions/requirements.txt"]
+    for bad in ("-r other.txt", "https://example.com/x.whl", "git+https://github.com/a/b", "./local"):
+        (root / "functions/requirements.txt").write_text(bad + "\n")
+        with pytest.raises(bundle.BundleError) as error:
+            bundle.build(root)
+        assert "requirements.txt:1" in str(error.value)

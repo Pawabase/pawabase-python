@@ -275,6 +275,8 @@ def cmd_deploy(args: argparse.Namespace, out: Out) -> int:
         out.info(f"  skipped {name}")
     if len(packed.skipped) > 8:
         out.info(f"  … and {len(packed.skipped) - 8} more skipped")
+    if packed.requirements:
+        out.line(f"requirements: {', '.join(packed.requirements)} (installed on the deployment)")
     if specs:
         out.line("functions: " + ", ".join(sorted(spec.name for spec in specs)))
     manifest = bundle.manifest(settings.branch, config.git_commit(settings.root), [{"name": s.name, "description": s.description, "policy": s.policy, "timeout": s.timeout} for s in specs], packed, __version__)

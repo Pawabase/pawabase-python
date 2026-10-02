@@ -3,6 +3,7 @@
 The archive is a gzip tar with this layout::
 
     functions/*.py            your functions
+    functions/requirements.txt   optional: the libraries they import; the deployment installs them when it activates
     <package>/...             each ``include`` entry (helper packages the functions import), at the archive root by its own name
 
 It is **reproducible**: entries are sorted, timestamps, owners and modes are normalised, and the gzip header carries no clock, so the same source always gives the
@@ -26,6 +27,10 @@ from pathlib import Path
 from typing import Any
 
 MAX_FILES = 2_000
+MAX_REQUIREMENTS = 100
+REQUIREMENTS = "requirements.txt"
+#: One plain requirement: a name, extras, version specifiers, an optional marker. Options, URLs, paths and VCS references are refused, as the platform does.
+REQUIREMENT_LINE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*(\[[A-Za-z0-9_,.\- ]+\])?\s*((===|==|>=|<=|~=|!=|<|>)\s*[A-Za-z0-9.*+!_-]+\s*,?\s*)*(;[^#]*)?$")
 MAX_FILE_BYTES = 10 * 1024 * 1024
 MAX_TOTAL_BYTES = 50 * 1024 * 1024
 
@@ -57,6 +62,7 @@ class Bundle:
     archive: bytes
     checksum: str
     files: list[tuple[str, int]] = field(default_factory=list)
+    requirements: list[str] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
 
     @property
@@ -156,6 +162,19 @@ def build(
         seen_roots.add(name)
         entries += _walk(source, f"{name}/", list(exclude), skipped, explicit=True)
     problems = [] if allow_secrets else _scan(entries)
+    requirements: list[str] = []
+    requirements_file = functions_dir / REQUIREMENTS
+    if requirements_file.is_file():
+        for number, raw in enumerate(requirements_file.read_text().splitlines(), 1):
+            line = "" if raw.lstrip().startswith("#") else raw.split(" #", 1)[0].strip()
+            if not line:
+                continue
+            if REQUIREMENT_LINE.match(line):
+                requirements.append(line)
+            else:
+                problems.append(f"{functions}/{REQUIREMENTS}:{number}: {line!r} is not a plain requirement (a package name with optional version, such as 'Pillow>=10.3').")
+        if len(requirements) > MAX_REQUIREMENTS:
+            problems.append(f"{functions}/{REQUIREMENTS} lists {len(requirements)} packages; the limit is {MAX_REQUIREMENTS}.")
     if len(entries) > MAX_FILES:
         problems.append(f"The bundle would contain {len(entries)} files; the limit is {MAX_FILES}. Exclude what the functions do not import.")
     sizes = [(archive_path, real.stat().st_size) for archive_path, real in entries]
@@ -176,7 +195,7 @@ def build(
             info.mode = 0o755 if real.stat().st_mode & 0o111 else 0o644
             archive.addfile(info, io.BytesIO(data))
     data = raw.getvalue()
-    return Bundle(archive=data, checksum=hashlib.sha256(data).hexdigest(), files=[(p, s) for p, s in sorted(sizes)], skipped=sorted(skipped))
+    return Bundle(archive=data, checksum=hashlib.sha256(data).hexdigest(), files=[(p, s) for p, s in sorted(sizes)], requirements=requirements, skipped=sorted(skipped))
 
 
 def read(archive: bytes) -> dict[str, bytes]:
@@ -199,4 +218,5 @@ def manifest(settings_branch: str, git: dict[str, Any], functions: list[dict[str
         "files": len(bundle.files),
         "bytes": bundle.total_bytes,
         "functions": functions,
+        "requirements": bundle.requirements,
     }
