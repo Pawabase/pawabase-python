@@ -14,7 +14,7 @@ pawabase --version
 
 ```bash
 pawabase init                  # functions/hello.py, tests/test_hello.py, .env.example
-pawabase link my-project       # writes pawabase.toml (project, environment): never the key
+pawabase link -e development  # writes pawabase.toml (url, environment): never the key
 echo 'PAWABASE_URL=https://api.example.com'   >> .env
 echo 'PAWABASE_API_KEY=pb_sk_...'             >> .env     # a SECRET key of the environment
 
@@ -64,17 +64,17 @@ async def test_hello():
 | `pawabase functions \| deployments \| rollback \| branches \| logs [-f]` | Inspect and operate |
 | `pawabase login \| logout \| link \| init \| whoami \| test` | Setup |
 
-Settings come from flags, `PAWABASE_URL`, `PAWABASE_API_KEY`, `PAWABASE_PROJECT`, `PAWABASE_ENVIRONMENT`, `PAWABASE_BRANCH`, a git-ignored `.env`, `pawabase.toml`, and
+Settings come from flags, `PAWABASE_URL`, `PAWABASE_API_KEY`, `PAWABASE_ENVIRONMENT`, `PAWABASE_BRANCH`, a git-ignored `.env`, `pawabase.toml`, and
 `pawabase login`, in that order. The key is never written to `pawabase.toml`.
 
 Exit status: `0` success, `1` the operation failed, `2` something is missing or misspelled.
 
-## Calling a project
+## Calling Pawabase
 
 ```python
 from pawabase import Pawabase
 
-with Pawabase("https://api.example.com", "pb_sk_...", project="my-project", environment="development") as pb:
+with Pawabase("https://api.example.com", "pb_sk_...", environment="development") as pb:
     pb.list("orders", sort="-created_at", limit=20)
     pb.create("orders", {"total": 12.5})
     pb.invoke_function("hello", {"name": "Ada"})

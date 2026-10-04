@@ -16,33 +16,33 @@ def load(tmp_path, **kw):
 
 def test_defaults_when_nothing_is_set(tmp_path):
     settings = load(tmp_path)
-    assert (settings.url, settings.api_key, settings.project) == (None, None, None)
+    assert (settings.url, settings.api_key) == (None, None)
     assert (settings.environment, settings.branch, settings.functions) == ("development", "main", "functions")
 
 
 def test_each_source_overrides_the_one_before(tmp_path):
     config.write_global({"url": "https://global.test", "api_key": "pb_sk_global_key_000000"})
-    (tmp_path / "pawabase.toml").write_text('url = "https://file.test"\nproject = "from-file"\nenvironment = "staging"\n')
-    assert (load(tmp_path).url, load(tmp_path).project, load(tmp_path).environment) == ("https://file.test", "from-file", "staging")
+    (tmp_path / "pawabase.toml").write_text('url = "https://file.test"\nenvironment = "staging"\n')
+    assert (load(tmp_path).url, load(tmp_path).environment) == ("https://file.test", "staging")
     assert load(tmp_path).api_key == "pb_sk_global_key_000000"
     (tmp_path / ".env").write_text("PAWABASE_API_KEY=pb_sk_dotenv_key_000000\nPAWABASE_ENVIRONMENT=qa\n")
     assert (load(tmp_path).api_key, load(tmp_path).environment) == ("pb_sk_dotenv_key_000000", "qa")
-    envs = {"PAWABASE_PROJECT": "from-env", "PAWABASE_API_KEY": "pb_sk_env_key_0000000000"}
-    assert (load(tmp_path, env=envs).project, load(tmp_path, env=envs).api_key) == ("from-env", "pb_sk_env_key_0000000000")
-    flagged = load(tmp_path, env=envs, project="from-flag", environment="prod")
-    assert (flagged.project, flagged.environment, flagged.sources["project"]) == ("from-flag", "prod", "flag")
+    envs = {"PAWABASE_ENVIRONMENT": "from-env", "PAWABASE_API_KEY": "pb_sk_env_key_0000000000"}
+    assert (load(tmp_path, env=envs).environment, load(tmp_path, env=envs).api_key) == ("from-env", "pb_sk_env_key_0000000000")
+    flagged = load(tmp_path, env=envs, environment="prod")
+    assert (flagged.environment, flagged.sources["environment"]) == ("prod", "flag")
 
 
 def test_the_project_file_is_found_from_a_subfolder(tmp_path):
-    (tmp_path / "pawabase.toml").write_text('project = "up-here"\nfunctions = "src/fn"\n')
+    (tmp_path / "pawabase.toml").write_text('environment = "up-here"\nfunctions = "src/fn"\n')
     deep = tmp_path / "a" / "b"
     deep.mkdir(parents=True)
     settings = config.load(cwd=deep, env={})
-    assert settings.project == "up-here" and settings.root == tmp_path.resolve() and settings.functions_dir == (tmp_path / "src/fn").resolve()
+    assert settings.environment == "up-here" and settings.root == tmp_path.resolve() and settings.functions_dir == (tmp_path / "src/fn").resolve()
 
 
 def test_a_key_in_the_project_file_is_refused_not_used(tmp_path):
-    (tmp_path / "pawabase.toml").write_text('project = "p"\napi_key = "pb_sk_oops"\n')
+    (tmp_path / "pawabase.toml").write_text('environment = "p"\napi_key = "pb_sk_oops"\n')
     with pytest.raises(config.ConfigError, match=r"\.env"):
         load(tmp_path)
 
@@ -50,15 +50,15 @@ def test_a_key_in_the_project_file_is_refused_not_used(tmp_path):
 def test_the_key_never_appears_in_a_repr_or_in_the_project_file_that_is_written(tmp_path):
     settings = load(tmp_path, api_key="pb_sk_very_secret_value_123")
     assert "very_secret" not in repr(settings) and "very_secret" not in str(settings.describe())
-    path = config.write_project_file(tmp_path, {"project": "p", "api_key": "pb_sk_very_secret_value_123", "environment": "development"})
-    assert "pb_sk" not in path.read_text() and 'project = "p"' in path.read_text()
+    path = config.write_project_file(tmp_path, {"api_key": "pb_sk_very_secret_value_123", "environment": "development"})
+    assert "pb_sk" not in path.read_text() and 'environment = "development"' in path.read_text()
 
 
 def test_missing_settings_say_how_to_supply_each(tmp_path):
     with pytest.raises(config.ConfigError) as raised:
-        load(tmp_path).require("url", "api_key", "project")
+        load(tmp_path).require("url", "api_key")
     text = str(raised.value)
-    assert "PAWABASE_URL" in text and "PAWABASE_API_KEY" in text and "pawabase link" in text
+    assert "PAWABASE_URL" in text and "PAWABASE_API_KEY" in text and "pawabase login" in text
 
 
 def test_dotenv_parsing_is_forgiving_and_never_executes_anything():
@@ -74,8 +74,6 @@ def test_branch_names_are_checked_and_git_branches_are_made_valid(tmp_path):
         load(tmp_path, branch="Bad Branch!")
     with pytest.raises(config.ConfigError):
         load(tmp_path, url="ftp://nope")
-    with pytest.raises(config.ConfigError):
-        load(tmp_path, project="Not A Project")
 
 
 def test_the_git_branch_is_used_only_when_asked(tmp_path):

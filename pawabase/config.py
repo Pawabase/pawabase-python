@@ -1,17 +1,17 @@
 """Where the CLI and the emulator find their settings.
 
-Four things say which Pawabase to talk to: the gateway **URL**, an **API key**, the **project** it belongs to, and the **environment** (plus a **branch**, when you
+Four things say which Pawabase to talk to: the gateway **URL**, an **API key**, and the **environment** it belongs to (plus a **branch**, when you
 work on one). They come from, in order of priority:
 
-1. command-line flags (``--url``, ``--api-key``, ``--project``, ``--environment``, ``--branch``);
-2. environment variables (``PAWABASE_URL``, ``PAWABASE_API_KEY``, ``PAWABASE_PROJECT``, ``PAWABASE_ENVIRONMENT``, ``PAWABASE_BRANCH``);
+1. command-line flags (``--url``, ``--api-key``, ``--environment``, ``--branch``);
+2. environment variables (``PAWABASE_URL``, ``PAWABASE_API_KEY``, ``PAWABASE_ENVIRONMENT``, ``PAWABASE_BRANCH``);
 3. a ``.env`` file next to the project file (so a deploy key lives with the project and stays out of version control);
-4. ``pawabase.toml`` in the project (never the key): ``url``, ``project``, ``environment``, ``branch``, ``functions``, ``include``, ``exclude``, limits;
+4. ``pawabase.toml`` in the project (never the key): ``url``, ``environment``, ``branch``, ``functions``, ``include``, ``exclude``, limits;
 5. the file ``pawabase login`` wrote to your home directory (``url`` and ``api_key``, mode 0600).
 
 The project file is found by walking up from the current directory, like ``git`` finds ``.git``. An older ``pawabase.json`` is read too.
 
-The API key is a *secret* project key (``pb_sk_…``): deploying and emulating are management actions. It is never written into the project file, and ``repr`` of
+The API key is a *secret* key of the environment (``pb_sk_…``): deploying and emulating are management actions. It is never written into the project file, and ``repr`` of
 the settings hides it.
 """
 
@@ -29,9 +29,8 @@ from typing import Any
 
 PROJECT_FILES = ("pawabase.toml", "pawabase.json")
 GLOBAL_FILE = Path(os.environ.get("PAWABASE_CONFIG_HOME", Path.home() / ".config" / "pawabase")) / "config.json"
-ENV_NAMES = {"url": "PAWABASE_URL", "api_key": "PAWABASE_API_KEY", "project": "PAWABASE_PROJECT", "environment": "PAWABASE_ENVIRONMENT", "branch": "PAWABASE_BRANCH"}
+ENV_NAMES = {"url": "PAWABASE_URL", "api_key": "PAWABASE_API_KEY", "environment": "PAWABASE_ENVIRONMENT", "branch": "PAWABASE_BRANCH"}
 BRANCH_PATTERN = re.compile(r"^[a-z][a-z0-9_-]{0,62}$")
-PROJECT_PATTERN = re.compile(r"^[a-z][a-z0-9-]{1,62}$")
 
 
 class ConfigError(Exception):
@@ -44,7 +43,6 @@ class Settings:
 
     url: str | None = None
     api_key: str | None = field(default=None, repr=False)
-    project: str | None = None
     environment: str = "development"
     branch: str = "main"
     root: Path = field(default_factory=Path.cwd)
@@ -58,7 +56,7 @@ class Settings:
 
     def __repr__(self) -> str:  # the key must never reach a log or a traceback
         key = "set" if self.api_key else "missing"
-        return f"Settings(url={self.url!r}, project={self.project!r}, environment={self.environment!r}, branch={self.branch!r}, api_key=<{key}>)"
+        return f"Settings(url={self.url!r}, environment={self.environment!r}, branch={self.branch!r}, api_key=<{key}>)"
 
     @property
     def functions_dir(self) -> Path:
@@ -69,7 +67,6 @@ class Settings:
         hints = {
             "url": "--url, PAWABASE_URL, or `pawabase login --url …`",
             "api_key": "--api-key, PAWABASE_API_KEY (in .env), or `pawabase login`",
-            "project": "--project, PAWABASE_PROJECT, or `pawabase link <project>`",
         }
         missing = [name for name in names if not getattr(self, name)]
         if missing:
@@ -80,7 +77,7 @@ class Settings:
         """Settings and where each came from, for ``pawabase whoami`` (the key shown as a hint, never whole)."""
         key = self.api_key
         return {
-            "url": self.url, "project": self.project, "environment": self.environment, "branch": self.branch,
+            "url": self.url, "environment": self.environment, "branch": self.branch,
             "api_key": f"{key[:8]}…{key[-4:]}" if key and len(key) > 14 else ("set" if key else None),
             "root": str(self.root), "functions": self.functions, "sources": dict(self.sources),
         }
@@ -165,7 +162,6 @@ def load(
     cwd: Path | None = None,
     url: str | None = None,
     api_key: str | None = None,
-    project: str | None = None,
     environment: str | None = None,
     branch: str | None = None,
     env: Mapping[str, str] | None = None,
@@ -180,7 +176,7 @@ def load(
     origin: dict[str, str] = {}
 
     def apply(source: str, data: Mapping[str, Any]) -> None:
-        for name in ("url", "api_key", "project", "environment", "branch", "functions", "timeout", "memory_mb"):
+        for name in ("url", "api_key", "environment", "branch", "functions", "timeout", "memory_mb"):
             if data.get(name) not in (None, ""):
                 values[name] = data[name]
                 origin[name] = source
@@ -198,7 +194,7 @@ def load(
     dotenv = parse_dotenv((root / ".env").read_text()) if (root / ".env").is_file() else {}
     apply(".env", {name: dotenv.get(var) for name, var in ENV_NAMES.items()})
     apply("environment", {name: environ.get(var) for name, var in ENV_NAMES.items()})
-    apply("flag", {"url": url, "api_key": api_key, "project": project, "environment": environment, "branch": branch})
+    apply("flag", {"url": url, "api_key": api_key, "environment": environment, "branch": branch})
 
     resolved_branch = str(values.get("branch") or "")
     if not resolved_branch and use_git_branch:
@@ -209,15 +205,12 @@ def load(
     resolved_branch = resolved_branch or "main"
     if not BRANCH_PATTERN.match(resolved_branch):
         raise ConfigError(f"{resolved_branch!r} is not a valid branch name (lowercase letters, digits, - and _, starting with a letter). `{slugify_branch(resolved_branch)}` would do.")
-    if values.get("project") and not PROJECT_PATTERN.match(str(values["project"])):
-        raise ConfigError(f"{values['project']!r} is not a valid project reference.")
     gateway = str(values["url"]).rstrip("/") if values.get("url") else None
     if gateway and not gateway.startswith(("http://", "https://")):
         raise ConfigError(f"The url must start with http:// or https:// (got {gateway!r}).")
     return Settings(
         url=gateway,
         api_key=values.get("api_key"),
-        project=values.get("project"),
         environment=str(values.get("environment") or "development"),
         branch=resolved_branch,
         root=root,
@@ -261,7 +254,7 @@ def write_project_file(root: Path, data: Mapping[str, Any]) -> Path:
 
 
 def write_global(data: Mapping[str, Any]) -> Path:
-    """Remember a URL and key for every project on this machine (mode 0600)."""
+    """Remember a URL and key for this machine (mode 0600)."""
     GLOBAL_FILE.parent.mkdir(parents=True, exist_ok=True)
     current = _read_file(GLOBAL_FILE)
     current.update({k: v for k, v in data.items() if v not in (None, "")})

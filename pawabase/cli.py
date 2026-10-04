@@ -3,7 +3,7 @@
 ::
 
     pawabase login --url https://api.example.com        remember a URL and API key on this machine
-    pawabase link my-project --environment development   say which project this folder deploys to (writes pawabase.toml)
+    pawabase link --environment development   say which environment this folder deploys to (writes pawabase.toml)
     pawabase init                                         scaffold functions/, a test and .env.example
     pawabase deploy [--branch NAME | --git-branch]        upload and activate your functions on the deployment
     pawabase emulate [--watch]                            run them locally against the deployment
@@ -97,33 +97,20 @@ class CliError(Exception):
 
 def settings_of(args: argparse.Namespace, *, git_branch: bool = False) -> config.Settings:
     try:
-        return config.load(url=args.url, api_key=args.api_key, project=args.project, environment=args.environment, branch=args.branch, use_git_branch=git_branch or getattr(args, "git_branch", False))
+        return config.load(url=args.url, api_key=args.api_key, environment=args.environment, branch=args.branch, use_git_branch=git_branch or getattr(args, "git_branch", False))
     except config.ConfigError as error:
         raise CliError(str(error), 2) from error
-
-
-def ask_for_project(settings: config.Settings) -> config.Settings:
-    """No project named and a person at the keyboard: ask, and offer to remember the answer in pawabase.toml."""
-    if settings.project or not sys.stdin.isatty():
-        return settings
-    project = input("Project reference (the `ref` of your project in Studio): ").strip()
-    if not project:
-        return settings
-    if input(f"Save it to {settings.root / 'pawabase.toml'}? [Y/n] ").strip().lower() in ("", "y", "yes"):
-        config.write_project_file(settings.root, {"project": project})
-    return config.with_overrides(settings, project=project)
 
 
 def client_of(settings: config.Settings) -> Pawabase:
-    settings = ask_for_project(settings)
     try:
-        settings.require("url", "api_key", "project")
+        settings.require("url", "api_key")
     except config.ConfigError as error:
         raise CliError(str(error), 2) from error
     if (settings.api_key or "").startswith("pb_pk_"):
-        raise CliError("PAWABASE_API_KEY is a publishable key (pb_pk_…). Deploying and emulating need the SECRET key (pb_sk_…) of this environment: Studio → this project → "
-                       "API keys. A publishable key is the one your app ships to browsers; it cannot manage the project.", 2)
-    return Pawabase(settings.url or "", settings.api_key or "", project=settings.project or "", environment=settings.environment)
+        raise CliError("PAWABASE_API_KEY is a publishable key (pb_pk_…). Deploying and emulating need the SECRET key (pb_sk_…) of this environment: Studio → this environment → "
+                       "API keys. A publishable key is the one your app ships to browsers; it cannot manage the environment.", 2)
+    return Pawabase(settings.url or "", settings.api_key or "", environment=settings.environment)
 
 
 def read_data(spec: str | None) -> Any:
@@ -141,7 +128,7 @@ def describe_error(error: PawabaseError) -> str:
     lines = [error.message]
     lines += [f"  - {problem}" for problem in error.problems]
     if error.status_code == 401:
-        lines.append("  The API key was refused. Check PAWABASE_API_KEY (a secret key, pb_sk_…) and that it belongs to this project and environment.")
+        lines.append("  The API key was refused. Check PAWABASE_API_KEY (a secret key, pb_sk_…) and that it belongs to this environment.")
     elif error.status_code == 403:
         lines.append("  The key lacks a scope for this (deploying needs functions:manage; emulating needs runtime:use) or belongs to another environment.")
     elif error.status_code == 0:
@@ -166,7 +153,7 @@ def cmd_login(args: argparse.Namespace, out: Out) -> int:
             raise CliError("Pass --key, set PAWABASE_API_KEY, or run this in a terminal to be asked.", 2)
         key = getpass.getpass("Secret API key (pb_sk_…): ").strip()
     if not key.startswith("pb_sk_"):
-        out.warn("That does not look like a secret key (pb_sk_…). Deploying and emulating need one; publishable keys cannot manage a project.")
+        out.warn("That does not look like a secret key (pb_sk_…). Deploying and emulating need one; publishable keys cannot manage an environment.")
     url = (args.url or "").rstrip("/") or None
     if not url and not config.load().url:
         raise CliError("Pass --url (the gateway's address).", 2)
@@ -184,9 +171,9 @@ def cmd_logout(_args: argparse.Namespace, out: Out) -> int:
 
 def cmd_link(args: argparse.Namespace, out: Out) -> int:
     settings = settings_of(args)
-    data = {"project": args.link_project, "environment": args.environment or settings.environment, "url": args.url or settings.url}
+    data = {"environment": args.environment or settings.environment, "url": args.url or settings.url}
     path = config.write_project_file(settings.root, data)
-    out.ok(f"Linked this folder to {args.link_project} ({data['environment']}) in {path.name}.")
+    out.ok(f"Linked this folder to the {data['environment']} environment in {path.name}.")
     if not settings.api_key:
         out.info("No API key yet: run `pawabase login`, or put PAWABASE_API_KEY=pb_sk_… in .env.")
     return 0
@@ -218,7 +205,7 @@ def cmd_init(args: argparse.Namespace, out: Out) -> int:
     root = Path(args.directory).resolve()
     (root / "functions").mkdir(parents=True, exist_ok=True)
     created = []
-    for relative, content in (("functions/hello.py", INIT_FUNCTION), ("tests/test_hello.py", INIT_TEST), (".env.example", "PAWABASE_URL=\nPAWABASE_API_KEY=pb_sk_...\nPAWABASE_PROJECT=\nPAWABASE_ENVIRONMENT=development\n")):
+    for relative, content in (("functions/hello.py", INIT_FUNCTION), ("tests/test_hello.py", INIT_TEST), (".env.example", "PAWABASE_URL=\nPAWABASE_API_KEY=pb_sk_...\nPAWABASE_ENVIRONMENT=development\n")):
         target = root / relative
         if target.exists():
             continue
@@ -231,7 +218,7 @@ def cmd_init(args: argparse.Namespace, out: Out) -> int:
         gitignore.write_text(existing + ("\n" if existing and not existing.endswith("\n") else "") + ".env\n__pycache__/\n")
         created.append(".gitignore")
     out.ok("Created " + ", ".join(created) if created else "Nothing to create: it is already set up.")
-    out.info("Next: pawabase link <project>, put your key in .env, then `pawabase deploy` or `pawabase emulate`.")
+    out.info("Next: pawabase link --environment <name>, put your key in .env, then `pawabase deploy` or `pawabase emulate`.")
     return 0
 
 
@@ -241,7 +228,7 @@ def cmd_whoami(args: argparse.Namespace, out: Out) -> int:
     if args.json:
         out.data(info)
     else:
-        for name in ("url", "project", "environment", "branch", "api_key", "root", "functions"):
+        for name in ("url", "environment", "branch", "api_key", "root", "functions"):
             out.line(f"{name:12} {info[name]}  " + out._paint("2", f"({info['sources'].get(name, 'default')})" if name in info["sources"] else ""))
     with client_of(settings) as client:
         try:
@@ -269,7 +256,7 @@ def cmd_deploy(args: argparse.Namespace, out: Out) -> int:
             raise CliError("Your functions do not import, so nothing was uploaded:\n  - " + "\n  - ".join(errors) + "\n  (use --no-check to upload anyway)")
         if not specs:
             raise CliError("No @function was found in the project. Is `functions` the right folder?")
-    where = f"{settings.project} / {settings.environment}" + (f" @ {settings.branch}" if settings.branch != "main" else "")
+    where = f"{settings.environment}" + (f" @ {settings.branch}" if settings.branch != "main" else "")
     out.line(f"{len(packed.files)} files, {packed.size / 1024:.1f} KB, checksum {packed.checksum[:12]}")
     for name in packed.skipped[:8]:
         out.info(f"  skipped {name}")
@@ -317,7 +304,7 @@ def cmd_emulate(args: argparse.Namespace, out: Out) -> int:
     emulator = Emulator(settings, host=args.host, port=args.port, watch=args.watch, log=None if args.quiet else out.line)
 
     def ready(info: dict[str, Any]) -> None:
-        out.ok(f"Emulating {settings.project} / {settings.environment}" + (f" @ {settings.branch}" if settings.branch != "main" else "") + f" on http://{args.host}:{args.port}")
+        out.ok(f"Emulating {settings.environment}" + (f" @ {settings.branch}" if settings.branch != "main" else "") + f" on http://{args.host}:{args.port}")
         out.line(f"  local functions ({len(info['local'])}): {', '.join(info['local']) or '-'}")
         out.line(f"  served locally: {info['routes_served_locally']} routes, plus /functions/v1 for the above; everything else is forwarded to {settings.url}")
         out.line(f"  deployment knows {len(info['deployed'])} functions, {info['subscriptions']} subscriptions, {info['schedules']} schedules")
@@ -526,13 +513,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="pawabase", description="Deploy, emulate and operate Pawabase functions.")
     parser.add_argument("--version", action="version", version=f"pawabase {__version__}")
     common = argparse.ArgumentParser(add_help=False)
-    # Accepted before or after the command (``pawabase --project p deploy`` and ``pawabase deploy --project p``). SUPPRESS keeps a value given in one place
+    # Accepted before or after the command (``pawabase -e prod deploy`` and ``pawabase deploy -e prod``). SUPPRESS keeps a value given in one place
     # from being overwritten by the other place's default.
     for target in (parser, common):
         group = target.add_argument_group("global options") if target is parser else target
         group.add_argument("--url", default=argparse.SUPPRESS, help="gateway URL (PAWABASE_URL)")
         group.add_argument("--api-key", default=argparse.SUPPRESS, help="secret API key (PAWABASE_API_KEY)")
-        group.add_argument("--project", default=argparse.SUPPRESS, help="project reference (PAWABASE_PROJECT)")
         group.add_argument("-e", "--environment", default=argparse.SUPPRESS, help="environment (PAWABASE_ENVIRONMENT; default development)")
         group.add_argument("-b", "--branch", default=argparse.SUPPRESS, help="branch (PAWABASE_BRANCH; default main)")
         group.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="machine-readable output")
@@ -547,8 +533,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = add("login", cmd_login, "Remember the gateway URL and a secret API key on this machine")
     p.add_argument("--key", dest="login_key", help="the key (otherwise asked, or PAWABASE_API_KEY)")
     add("logout", cmd_logout, "Forget the saved URL and key")
-    p = add("link", cmd_link, "Say which project and environment this folder deploys to (writes pawabase.toml)")
-    p.add_argument("link_project", metavar="project")
+    p = add("link", cmd_link, "Say which environment this folder deploys to (writes pawabase.toml)")
     p = add("init", cmd_init, "Scaffold functions/, a test and .env.example")
     p.add_argument("directory", nargs="?", default=".")
     add("whoami", cmd_whoami, "Show the resolved settings and check the deployment accepts them")
@@ -598,7 +583,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    for name, default in (("url", None), ("api_key", None), ("project", None), ("environment", None), ("branch", None), ("json", False), ("quiet", False)):
+    for name, default in (("url", None), ("api_key", None), ("environment", None), ("branch", None), ("json", False), ("quiet", False)):
         if not hasattr(args, name):
             setattr(args, name, default)
     out = Out(as_json=args.json, quiet=args.quiet)
