@@ -104,9 +104,9 @@ class Emulator:
         client: AsyncPawabase | None = None,
         log: Callable[[str], None] | None = print,
     ) -> None:
-        self.settings = settings.require("url", "api_key", "project")
+        self.settings = settings.require("url", "api_key")
         self.host, self.port, self.watch = host, port, watch
-        self.client = client or AsyncPawabase(settings.url or "", settings.api_key or "", project=settings.project or "", environment=settings.environment)
+        self.client = client or AsyncPawabase(settings.url or "", settings.api_key or "", environment=settings.environment)
         self.log = log or (lambda _line: None)
         self.runtime = RemoteRuntime(self.client, branch=settings.branch if settings.branch != "main" else None)
         self.code: ProjectCode | None = None
@@ -135,7 +135,7 @@ class Emulator:
 
     def _local_caller(self, spec: FunctionSpec) -> Callable[[Any], Any]:
         async def call(input: Any) -> Any:
-            outcome = await invoke(spec, input, runtime=self.runtime, project=self.settings.project or "", env=self.settings.environment, branch=self.settings.branch, trigger="flow")
+            outcome = await invoke(spec, input, runtime=self.runtime, project=LOCAL_PROJECT, env=self.settings.environment, branch=self.settings.branch, trigger="flow")
             return outcome.raise_for_error()
 
         return call
@@ -184,7 +184,7 @@ class Emulator:
         if credential["is_service"]:
             return None
         context = {"auth": auth, "credential": credential, "request": {"method": payload.get("method"), "path": payload.get("path"), "ip": payload.get("client_ip")},
-                   "project": self.settings.project, "env": self.settings.environment, "input": payload.get("body"), "record": None}
+                   "env": self.settings.environment, "input": payload.get("body"), "record": None}
         try:
             allowed = await self.client.runtime_call("check_policy", [policy, context])
         except PawabaseError as error:
@@ -234,7 +234,7 @@ class Emulator:
         if spec is None:
             raise LookupError(name)
         runtime = self.runtime.for_caller(auth, branch=branch_override)
-        outcome = await invoke(spec, input, runtime=runtime, auth=auth, project=self.settings.project or "", env=self.settings.environment, branch=self.settings.branch, trigger=trigger, request=request)
+        outcome = await invoke(spec, input, runtime=runtime, auth=auth, project=LOCAL_PROJECT, env=self.settings.environment, branch=self.settings.branch, trigger=trigger, request=request)
         self.runs.appendleft({"function": name, "status": outcome.status, "ok": outcome.ok, "duration_ms": outcome.duration_ms, "trigger": trigger, "at": time.time(),
                               "error": (outcome.error or {}).get("message"), "logs": outcome.logs[-20:]})
         if outcome.traceback:
@@ -295,7 +295,7 @@ class Emulator:
 
     async def _control(self, method: str, path: str, query: Mapping[str, str], body: bytes) -> Response:
         if path == "/health":
-            return Response.json(200, {"status": "ok", "project": self.settings.project, "environment": self.settings.environment, "branch": self.settings.branch})
+            return Response.json(200, {"status": "ok", "environment": self.settings.environment, "branch": self.settings.branch})
         if path == "/functions":
             return Response.json(200, {"data": [{**spec.describe(), "source": "local"} for spec in list_functions(self.project_key) if spec.project == self.project_key], "errors": self.code.errors if self.code else []})
         if path == "/routes":
@@ -324,7 +324,7 @@ class Emulator:
         copy of your local function a second time)."""
         if remote_only:
             return {"mode": "remote", "event_id": (await self.client.emit_event(name, payload)).get("event_id")}
-        event = {"name": name, "payload": payload, "source": "emulator", "project": self.settings.project, "env": self.settings.environment, "occurred_at": time.time()}
+        event = {"name": name, "payload": payload, "source": "emulator", "env": self.settings.environment, "occurred_at": time.time()}
         results = []
         for sub in self.subscriptions:
             if not fnmatch.fnmatchcase(name, sub["event"]):

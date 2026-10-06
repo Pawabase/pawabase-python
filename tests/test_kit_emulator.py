@@ -11,7 +11,7 @@ from pawabase.client import AsyncPawabase
 from pawabase.config import Settings
 from pawabase.emulator import Emulator
 
-ENV = "/platform/v1/projects/shop/envs/development"
+ENV = "/platform/v1/envs/development"
 
 CODE = textwrap.dedent(
     '''
@@ -99,8 +99,8 @@ async def emu(tmp_path):
     (tmp_path / "functions").mkdir()
     (tmp_path / "functions" / "f.py").write_text(CODE)
     deployment = Deployment()
-    settings = Settings(url="http://gateway.test", api_key="pb_sk_testkey000000000000", project="shop", environment="development", root=tmp_path)
-    client = AsyncPawabase(settings.url, settings.api_key, project="shop")
+    settings = Settings(url="http://gateway.test", api_key="pb_sk_testkey000000000000", environment="development", root=tmp_path)
+    client = AsyncPawabase(settings.url, settings.api_key)
     client._client = httpx.AsyncClient(transport=httpx.MockTransport(deployment), base_url=settings.url, headers=client.headers)
     emulator = Emulator(settings, client=client, log=None)
     emulator.proxy = httpx.AsyncClient(transport=httpx.MockTransport(deployment), base_url=settings.url)
@@ -191,7 +191,7 @@ async def test_a_schedule_runs_locally_when_its_function_is_local_and_remotely_o
 
 async def test_control_endpoints_and_the_run_history(emu):
     await emu.handle("POST", "/functions/v1/greet", {}, b"{}")
-    assert body(await emu.handle("GET", "/_emulator/health", {}, b""))["project"] == "shop"
+    assert body(await emu.handle("GET", "/_emulator/health", {}, b""))["environment"] == "development"
     assert {f["name"] for f in body(await emu.handle("GET", "/_emulator/functions", {}, b""))["data"]} >= {"greet", "chain"}
     assert body(await emu.handle("GET", "/_emulator/routes", {}, b""))["data"][0]["path"] == "/rest/v1/orders/{id}"
     runs = body(await emu.handle("GET", "/_emulator/runs", {}, b""))["data"]

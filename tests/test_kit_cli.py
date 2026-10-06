@@ -8,7 +8,7 @@ import pytest
 from pawabase import cli, config
 from pawabase.client import Pawabase
 
-ENV = "/platform/v1/projects/shop/envs/development"
+ENV = "/platform/v1/envs/development"
 KEY = "pb_sk_cli_test_key_0000000000"
 
 
@@ -49,8 +49,8 @@ def gateway(monkeypatch):
     fake = Gateway()
 
     def client_of(settings):
-        settings.require("url", "api_key", "project")
-        client = Pawabase(settings.url, settings.api_key, project=settings.project, environment=settings.environment, retries=0)
+        settings.require("url", "api_key")
+        client = Pawabase(settings.url, settings.api_key, environment=settings.environment, retries=0)
         client._client = httpx.Client(transport=httpx.MockTransport(fake), base_url=settings.url, headers=client.headers)
         return client
 
@@ -64,7 +64,7 @@ def run(*argv):
 
 def configured(tmp_path):
     cli.main(["init"])
-    (tmp_path / "pawabase.toml").write_text('url = "https://gw.test"\nproject = "shop"\n')
+    (tmp_path / "pawabase.toml").write_text('url = "https://gw.test"\n')
     (tmp_path / ".env").write_text(f"PAWABASE_API_KEY={KEY}\n")
 
 
@@ -83,17 +83,17 @@ def test_init_scaffolds_a_working_project_and_keeps_the_key_out_of_git(tmp_path,
     assert done.returncode == 0, done.stdout + done.stderr
 
 
-def test_link_writes_the_project_and_environment_but_never_a_key(tmp_path):
-    assert run("--url", "https://gw.test", "--api-key", KEY, "link", "shop", "-e", "staging") == 0
+def test_link_writes_the_environment_but_never_a_key(tmp_path):
+    assert run("--url", "https://gw.test", "--api-key", KEY, "link", "-e", "staging") == 0
     text = (tmp_path / "pawabase.toml").read_text()
-    assert 'project = "shop"' in text and 'environment = "staging"' in text and "pb_sk" not in text
+    assert 'environment = "staging"' in text and "pb_sk" not in text
 
 
 def test_missing_settings_exit_2_and_say_what_to_do(tmp_path, capsys):
     run("init")
     assert run("deploy") == 2
     err = capsys.readouterr().err
-    assert "PAWABASE_API_KEY" in err and "pawabase link" in err
+    assert "PAWABASE_API_KEY" in err and "pawabase login" in err
 
 
 def test_dry_run_builds_and_checks_but_uploads_nothing(tmp_path, gateway, capsys):
@@ -109,7 +109,7 @@ def test_deploy_uploads_once_then_says_nothing_changed(tmp_path, gateway, capsys
     assert run("deploy") == 0
     first = [r for r in gateway.requests if r[0] == "POST"][0]
     assert first[3]["branch"] == "main" and first[3]["manifest"]["functions"][0]["name"] == "hello" and first[3]["manifest"]["kit"]
-    assert "Deployed to shop / development" in capsys.readouterr().out
+    assert "Deployed to development" in capsys.readouterr().out
     assert run("deploy") == 0
     assert "No changes" in capsys.readouterr().out and len([r for r in gateway.requests if r[0] == "POST"]) == 1
     assert run("deploy", "--force") == 0 and len([r for r in gateway.requests if r[0] == "POST"]) == 2

@@ -4,8 +4,8 @@
 answers with a value and an async client with an awaitable.
 
 Authentication is the project's key in the ``apikey`` header. A *publishable* key (``pb_pk_…``) is what a browser or app holds: it reaches the data plane
-under the project's policies. A *secret* key (``pb_sk_…``) is what a server, the CLI and the emulator hold: it also reaches the management plane for **its own
-project and environment** (deploying functions, reading runs, firing events). The gateway turns the key into a signed project context; the raw key is never
+under the environment's policies. A *secret* key (``pb_sk_…``) is what a server, the CLI and the emulator hold: it also reaches the management plane for **its own
+environment** (deploying functions, reading runs, firing events). The gateway turns the key into a signed environment context; the raw key is never
 forwarded to a function or to an internal service.
 """
 
@@ -80,7 +80,6 @@ class _Endpoints:
     """Every endpoint, once. ``_call`` is supplied by the concrete client."""
 
     url: str
-    project: str
     environment: str
 
     def _call(self, method: str, path: str, *, json: Any = None, params: Mapping[str, Any] | None = None, retry: bool = False) -> Any:
@@ -116,7 +115,7 @@ class _Endpoints:
         return self._call("GET", "/auth/v1/settings", retry=True)
 
     def _manage(self, suffix: str) -> str:
-        return f"/platform/v1/projects/{quote(self.project)}/envs/{quote(self.environment)}{suffix}"
+        return f"/platform/v1/envs/{quote(self.environment)}{suffix}"
 
     # ── data plane ──────────────────────────────────────────────────────
 
@@ -149,7 +148,7 @@ class _Endpoints:
     # ── functions: deploying and running them ───────────────────────────
 
     def functions(self, *, branch: str | None = None) -> Any:
-        """Functions visible to the environment (and *branch*), each saying whether it came from a branch, a deployment or the project's mounted code."""
+        """Functions visible to the environment (and *branch*), each saying whether it came from a branch, a deployment or the runtime's mounted code."""
         return self._call("GET", self._manage("/functions"), params={"branch": branch} if branch else None, retry=True)
 
     def deploy_functions(
@@ -243,10 +242,9 @@ def _failure(response: httpx.Response) -> PawabaseError:
 
 
 class _Base(_Endpoints):
-    def __init__(self, url: str, api_key: str, *, project: str, environment: str = "development", timeout: float = 30.0, retries: int = 2) -> None:
+    def __init__(self, url: str, api_key: str, *, environment: str = "development", timeout: float = 30.0, retries: int = 2) -> None:
         self.url = url.rstrip("/")
         self.api_key = api_key
-        self.project = project
         self.environment = environment
         self.timeout = timeout
         self.retries = retries
@@ -254,12 +252,12 @@ class _Base(_Endpoints):
         self._borrowed = False
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(url={self.url!r}, project={self.project!r}, environment={self.environment!r}, api_key=<hidden>)"
+        return f"{type(self).__name__}(url={self.url!r}, environment={self.environment!r}, api_key=<hidden>)"
 
     @property
     def headers(self) -> dict[str, str]:
-        # The gateway resolves this key into a signed project context. The raw key is never forwarded to a function or an internal Pawabase service.
-        return {"apikey": self.api_key, "x-project-id": self.project, "x-environment": self.environment, "user-agent": "pawabase-python/0.2"}
+        # The gateway resolves this key into a signed environment context. The raw key is never forwarded to a function or an internal Pawabase service.
+        return {"apikey": self.api_key, "x-environment": self.environment, "user-agent": "pawabase-python/0.2"}
 
     def as_user(self, token: str | None, **headers: str) -> Any:
         """A view of this client that acts as one signed-in user: the same connection pool, with ``Authorization: Bearer <token>`` (and any extra *headers*) on every request.
@@ -288,15 +286,14 @@ class Pawabase(_Base):
 
     Args:
         url: The gateway URL.
-        api_key: A publishable or secret project key.
-        project: The project reference the key belongs to.
+        api_key: A publishable or secret key of the environment.
         environment: The environment, such as ``development``.
         timeout: Seconds per request.
         retries: Extra attempts for reads that fail with a connection error or a 502/503/504.
     """
 
-    def __init__(self, url: str, api_key: str, *, project: str, environment: str = "development", timeout: float = 30.0, retries: int = 2) -> None:
-        super().__init__(url, api_key, project=project, environment=environment, timeout=timeout, retries=retries)
+    def __init__(self, url: str, api_key: str, *, environment: str = "development", timeout: float = 30.0, retries: int = 2) -> None:
+        super().__init__(url, api_key, environment=environment, timeout=timeout, retries=retries)
         self._client = httpx.Client(base_url=self.url, headers=self.headers, timeout=timeout)
 
     def close(self) -> None:
@@ -336,8 +333,8 @@ class Pawabase(_Base):
 class AsyncPawabase(_Base):
     """Async client: the same methods, each returning an awaitable."""
 
-    def __init__(self, url: str, api_key: str, *, project: str, environment: str = "development", timeout: float = 30.0, retries: int = 2) -> None:
-        super().__init__(url, api_key, project=project, environment=environment, timeout=timeout, retries=retries)
+    def __init__(self, url: str, api_key: str, *, environment: str = "development", timeout: float = 30.0, retries: int = 2) -> None:
+        super().__init__(url, api_key, environment=environment, timeout=timeout, retries=retries)
         self._client = httpx.AsyncClient(base_url=self.url, headers=self.headers, timeout=timeout)
 
     async def close(self) -> None:
