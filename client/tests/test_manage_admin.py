@@ -114,3 +114,40 @@ async def test_the_same_methods_are_awaitable_on_the_async_client(wire):
     await client.manage.secrets.list()
     await client.admin.users.search(search="ada")
     assert wire.last.url.path == f"{BASE}/auth/users"
+
+
+def test_realtime_channel_rules(wire, sk):
+    sk.manage.realtime_channels.list()
+    assert wire.last.url.path == f"{BASE}/realtime-channels"
+    sk.manage.realtime_channels.create("chat:*", kind="presence", publish="signed_in", history=100)
+    assert wire.last.method == "POST" and wire.json() == {
+        "pattern": "chat:*", "kind": "presence", "subscribe": "authenticated", "publish": "signed_in", "presence": True, "history": 100,
+        "message_size_limit": 0, "publish_rate_limit": 0, "subscription_limit": 0, "retention_seconds": 0, "description": "",
+    }
+    sk.manage.realtime_channels.update("c1", history=10, presence=False)
+    assert wire.last.method == "PATCH" and wire.last.url.path == f"{BASE}/realtime-channels/c1" and wire.json() == {"history": 10, "presence": False}
+    sk.manage.realtime_channels.remove("c1")
+    assert wire.last.method == "DELETE" and wire.last.url.path == f"{BASE}/realtime-channels/c1"
+
+
+def test_dashboards(wire, sk):
+    sk.manage.dashboards.create("sales", {"pages": [{"title": "Sales"}]}, title="Sales")
+    assert wire.last.method == "POST" and wire.last.url.path == f"{BASE}/dashboards"
+    assert wire.json() == {"name": "sales", "title": "Sales", "description": "", "definition": {"pages": [{"title": "Sales"}]}, "enabled": True}
+    sk.manage.dashboards.update("d1", enabled=False)
+    assert wire.last.method == "PATCH" and wire.json() == {"enabled": False}
+    sk.manage.dashboards.publish("d1", public=True, publishable_key="pb_pk_12345678")
+    assert wire.last.method == "PUT" and wire.last.url.path == f"{BASE}/dashboards/d1/publish" and wire.json() == {"public": True, "publishable_key": "pb_pk_12345678"}
+    sk.manage.dashboards.publish("d1", public=False)
+    assert wire.json() == {"public": False}
+    sk.manage.dashboards.get_one("d1")
+    sk.manage.dashboards.remove("d1")
+    assert wire.last.method == "DELETE"
+
+
+def test_key_scopes_and_token_profile_preview(wire, sk):
+    sk.manage.keys.scopes()
+    assert wire.last.url.path == "/platform/v1/key-scopes"
+    sk.admin.insight.preview_token_profile({"name": "billing"}, "u1", org="acme")
+    assert wire.last.method == "POST" and wire.last.url.path == f"{BASE}/auth/token-profiles/preview"
+    assert wire.json() == {"profile": {"name": "billing"}, "user_id": "u1", "org": "acme"}

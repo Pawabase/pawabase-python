@@ -59,6 +59,11 @@ request, and an expiring or rejected token is renewed with the refresh token. Al
 verification, password reset, linked identities, `pb.auth.mfa` (authenticator app, emailed codes, recovery codes), `pb.auth.sessions`, `pb.auth.devices`,
 `pb.auth.api_keys` (keys a user makes for themselves), and `pb.auth.orgs` (organizations, members, invitations, teams).
 
+More ways in: guest sessions (`sign_in_anonymously()`, then `upgrade_anonymous(email=…, password=…)` keeps what the guest made), emailed codes
+(`send_email_code(email=…)` then `verify_email_code(email=…, code=…)`), and passkeys (`pb.auth.passkeys`: `register_options` / `register_verify` and
+`authenticate_options` / `authenticate_verify` carry the WebAuthn ceremony; the device does the signing). `issue_token("billing")` trades the session for
+a short-lived token for another service, and `jwks()` returns the public keys a server checks such tokens with.
+
 A web server acts as the visiting user without sharing a connection's credentials:
 
 ```python
@@ -101,6 +106,9 @@ async with AsyncPawabase(url, key) as pb:
 ```
 
 Publishing, presence and history also work over plain HTTP on the blocking client: `pb.realtime.publish(...)`, `.presence(channel)`, `.history(channel)`.
+
+Without a socket: `pb.realtime.sse(["chat:lobby"])` listens over Server-Sent Events (a generator on the sync client, an async generator on the async one), and
+`pb.realtime.publish(...)` sends. Channel rules and dashboards are managed with `pb.manage.realtime_channels` and `pb.manage.dashboards`.
 
 ## Administering users and the environment (secret key)
 

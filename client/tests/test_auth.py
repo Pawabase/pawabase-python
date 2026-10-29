@@ -136,3 +136,63 @@ async def test_async_sign_in_and_automatic_renewal(wire):
     wire.answer(lambda request: httpx.Response(200, json=session("a2", "r2")) if request.url.path == "/auth/v1/token" else httpx.Response(200, json=USER))
     assert (await pb.auth.get_user())["id"] == "u1" and pb.auth.access_token == "a2"
     assert time.time() < pb.auth.session.expires_at
+
+
+def test_a_guest_session_can_be_upgraded_to_a_full_account(wire, pb):
+    guest = {**USER, "email": None, "is_anonymous": True}
+    wire.answer(httpx.Response(201, json={**session(), "user": guest}))
+    got = pb.auth.sign_in_anonymously()
+    assert got.access_token == "a1" and pb.auth.user["is_anonymous"] is True
+    assert wire.last.url.path == "/auth/v1/anonymous" and "authorization" not in wire.last.headers
+    wire.answer(httpx.Response(200, json={"user": {**USER, "is_anonymous": False}, "verification_sent": True}))
+    result = pb.auth.upgrade_anonymous(email="ada@x.io", password="pw", name="Ada")
+    assert result["verification_sent"] and pb.auth.user["is_anonymous"] is False
+    assert wire.last.url.path == "/auth/v1/anonymous/upgrade" and wire.last.headers["authorization"] == "Bearer a1"
+    assert wire.json() == {"email": "ada@x.io", "password": "pw", "name": "Ada"}
+
+
+def test_email_code_sign_in(wire, pb):
+    wire.answer(httpx.Response(200, json={"sent": True, "message": "ok"}))
+    pb.auth.send_email_code(email="ada@x.io", create_user=False)
+    assert wire.last.url.path == "/auth/v1/email-code" and wire.json() == {"email": "ada@x.io", "create_user": False}
+    wire.answer(httpx.Response(200, json=session()))
+    result = pb.auth.verify_email_code(email="ada@x.io", code="123456")
+    assert result.status == "signed_in" and pb.auth.access_token == "a1"
+    assert wire.last.url.path == "/auth/v1/email-code/verify" and wire.json() == {"email": "ada@x.io", "code": "123456"}
+    wire.answer(httpx.Response(200, json={"mfa_required": True, "mfa_token": "m1", "factors": ["totp"]}))
+    assert pb.auth.verify_email_code(email="ada@x.io", code="654321").status == "mfa_required"
+
+
+def test_passkeys_carry_both_ends_of_the_ceremony(wire, pb):
+    wire.answer(httpx.Response(200, json=session()))
+    pb.auth.sign_in_with_password(email="ada@x.io", password="pw")
+    wire.answer(httpx.Response(200, json={"ticket": "tk_1", "options": {"challenge": "c"}}))
+    assert pb.auth.passkeys.register_options()["ticket"] == "tk_1"
+    wire.answer(httpx.Response(201, json={"passkey": {"id": "p1", "name": "Laptop"}}))
+    pb.auth.passkeys.register_verify(ticket="tk_1", credential={"id": "cred"}, name="Laptop")
+    assert wire.last.url.path == "/auth/v1/passkeys/register/verify" and wire.json() == {"ticket": "tk_1", "credential": {"id": "cred"}, "name": "Laptop"}
+    wire.answer(httpx.Response(200, json={"data": [{"id": "p1"}]}))
+    assert pb.auth.passkeys.list() == [{"id": "p1"}]
+    wire.answer(httpx.Response(200, json={"deleted": True}))
+    pb.auth.passkeys.remove("p1")
+    assert wire.last.method == "DELETE" and wire.last.url.path == "/auth/v1/passkeys/p1"
+
+
+def test_signing_in_with_a_passkey_keeps_the_session(wire, pb):
+    wire.answer(httpx.Response(200, json={"ticket": "tk_2", "options": {"challenge": "c"}}))
+    options = pb.auth.passkeys.authenticate_options(email="ada@x.io")
+    assert options["ticket"] == "tk_2" and wire.json() == {"email": "ada@x.io"} and "authorization" not in wire.last.headers
+    wire.answer(httpx.Response(200, json=session("pk1", "pr1")))
+    got = pb.auth.passkeys.authenticate_verify(ticket="tk_2", credential={"id": "cred"})
+    assert got.access_token == "pk1" and pb.auth.access_token == "pk1"
+
+
+def test_integration_tokens_and_their_public_keys(wire, pb):
+    wire.answer(httpx.Response(200, json=session()))
+    pb.auth.sign_in_with_password(email="ada@x.io", password="pw")
+    wire.answer(httpx.Response(200, json={"token": "t", "token_type": "bearer", "expires_in": 300, "expires_at": 1, "audience": "https://billing"}))
+    assert pb.auth.issue_token("billing")["audience"] == "https://billing"
+    assert wire.last.url.path == "/auth/v1/token-profiles/issue" and wire.json() == {"profile": "billing"}
+    wire.answer(httpx.Response(200, json={"keys": [{"kid": "k1"}]}))
+    assert pb.auth.jwks()["keys"][0]["kid"] == "k1"
+    assert wire.last.url.path.startswith("/auth/v1/token-keys/") and wire.last.url.path.endswith("/jwks")

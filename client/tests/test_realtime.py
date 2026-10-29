@@ -83,3 +83,48 @@ async def test_iterating_a_channel_yields_its_messages_and_ends_on_close(gateway
     await pb.close()
     with pytest.raises(StopAsyncIteration):
         await asyncio.wait_for(room.__anext__(), 2)
+
+
+SSE_BODY = (
+    b'data: {"type": "welcome", "connection_id": "c9", "channels": ["chat:lobby"]}\n\n'
+    b": keep-alive\n\n"
+    b'data: {"type": "message", "channel": "chat:lobby", "event": "hi", "payload": {"n": 1}}\n\n'
+)
+
+
+def test_sse_streams_frames_over_http(wire):
+    import httpx
+
+    from tests.conftest import make
+
+    wire.answer(httpx.Response(200, headers={"content-type": "text/event-stream"}, content=SSE_BODY))
+    pb = make(wire)
+    frames = list(pb.realtime.sse(["chat:lobby", "chat:ops"]))
+    assert [f["type"] for f in frames] == ["welcome", "message"] and frames[1]["payload"] == {"n": 1}
+    assert wire.last.url.path == "/realtime/v1/sse" and wire.query() == {"channels": "chat:lobby,chat:ops"}
+    assert wire.last.headers["accept"] == "text/event-stream"
+
+
+async def test_sse_streams_frames_on_the_async_client(wire):
+    import httpx
+
+    from tests.conftest import make_async
+
+    wire.answer(httpx.Response(200, headers={"content-type": "text/event-stream"}, content=SSE_BODY))
+    pb = make_async(wire)
+    frames = [frame async for frame in pb.realtime.sse("chat:lobby")]
+    assert [f["event"] for f in frames if f["type"] == "message"] == ["hi"]
+
+
+def test_sse_needs_a_channel_and_surfaces_errors(wire):
+    import httpx
+
+    from pawabase import ConfigError, PawabaseError
+    from tests.conftest import make
+
+    pb = make(wire)
+    with pytest.raises(ConfigError):
+        pb.realtime.sse([])
+    wire.answer(httpx.Response(403, json={"detail": "not allowed"}))
+    with pytest.raises(PawabaseError):
+        list(pb.realtime.sse(["secret"]))

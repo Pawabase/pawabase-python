@@ -143,6 +143,7 @@ class Auth:
         self.devices = Devices(self)
         self.api_keys = ApiKeys(self)
         self.orgs = Orgs(self)
+        self.passkeys = Passkeys(self)
 
     # ── the session ──────────────────────────────────────────────────────
 
@@ -367,6 +368,49 @@ class Auth:
     def identities(self) -> Any:
         return _core.then(self.get_user(), lambda user: user.get("identities", []))
 
+    # ── guests, emailed codes, integration tokens ────────────────────────
+
+    def sign_in_anonymously(self) -> Any:
+        """Start a guest session: an account with no email or password, for someone who has not signed up yet. Turn it into a real one with
+        :meth:`upgrade_anonymous`, keeping everything the guest created. The environment must allow guest sign-in."""
+        def done(wire: Any) -> Session:
+            session = Session.of(wire)
+            self._keep(session, "SIGNED_IN")
+            return session
+
+        return _core.then(self._c._call("POST", "/auth/v1/anonymous", json={}, auth=False), done)
+
+    def upgrade_anonymous(self, *, email: str, password: str | None = None, name: str | None = None, redirect_to: str | None = None) -> Any:
+        """Turn the signed-in guest into a full account (a verification email is sent): ``{"user", "verification_sent"}``."""
+        body = _core.compact({"email": email, "password": password, "name": name, "redirect_to": redirect_to})
+
+        def done(wire: Any) -> Any:
+            session = self.session
+            if session and wire.get("user"):
+                session.user = wire["user"]
+                self._store.set(session)
+                self._emit("USER_UPDATED", session)
+            return wire
+
+        return _core.then(self._c._call("POST", "/auth/v1/anonymous/upgrade", json=body), done)
+
+    def send_email_code(self, *, email: str, create_user: bool = True) -> Any:
+        """Email a short sign-in code (the answer is the same whether or not the address has an account)."""
+        return self._c._call("POST", "/auth/v1/email-code", json={"email": email, "create_user": create_user}, auth=False)
+
+    def verify_email_code(self, *, email: str, code: str) -> Any:
+        """Sign in with the code from :meth:`send_email_code`: a :class:`SignInResult` (``mfa_required`` when the account has a second factor)."""
+        return _core.then(self._c._call("POST", "/auth/v1/email-code/verify", json={"email": email, "code": code}, auth=False), self._signed_in)
+
+    def jwks(self) -> Any:
+        """The public keys that verify integration tokens (:meth:`issue_token`): ``{"keys": [...]}``, for a server checking them."""
+        return self._c._call("GET", f"/auth/v1/token-keys/{_core.path_of(self._c.environment)}/jwks", retry=True, auth=False)
+
+    def issue_token(self, profile: str) -> Any:
+        """Exchange the signed-in session for a short-lived token for another service, shaped by a token profile you defined in Studio:
+        ``{"token", "token_type", "expires_in", "expires_at", "audience"}``."""
+        return self._c._call("POST", "/auth/v1/token-profiles/issue", json={"profile": profile})
+
     def switch_org(self, slug: str | None) -> Any:
         """Get tokens for another organization of the user (``None`` for none)."""
         return self.refresh_session(org=slug)
@@ -455,6 +499,41 @@ class Devices(_Part):
 
     def forget(self, device_id: str) -> Any:
         return self._c._call("DELETE", f"/auth/v1/user/devices/{_core.path_of(device_id)}")
+
+
+class Passkeys(_Part):
+    """Passkeys (WebAuthn) of the signed-in user, and signing in with one.
+
+    The browser (or a native app) makes the credential: ``options`` goes to ``navigator.credentials.create`` / ``.get``, and what it returns
+    goes back with the ``ticket``. This part carries both ends over the wire; the TypeScript client does the browser step too.
+    """
+
+    def list(self) -> Any:
+        return _core.then(self._c._call("GET", "/auth/v1/passkeys", retry=True), lambda body: body["data"])
+
+    def remove(self, passkey_id: str) -> Any:
+        return self._c._call("DELETE", f"/auth/v1/passkeys/{_core.path_of(passkey_id)}")
+
+    def register_options(self) -> Any:
+        """Begin adding a passkey: ``{"ticket", "options"}``."""
+        return self._c._call("POST", "/auth/v1/passkeys/register/options", json={})
+
+    def register_verify(self, *, ticket: str, credential: Mapping[str, Any], name: str | None = None) -> Any:
+        """Finish adding a passkey with the credential the device made: ``{"passkey": ...}``."""
+        return self._c._call("POST", "/auth/v1/passkeys/register/verify", json=_core.compact({"ticket": ticket, "credential": dict(credential), "name": name}))
+
+    def authenticate_options(self, *, email: str | None = None) -> Any:
+        """Begin signing in with a passkey (with an email, only that account's are offered): ``{"ticket", "options"}``."""
+        return self._c._call("POST", "/auth/v1/passkeys/authenticate/options", json=_core.compact({"email": email}), auth=False)
+
+    def authenticate_verify(self, *, ticket: str, credential: Mapping[str, Any]) -> Any:
+        """Finish signing in with the credential the device made: the session."""
+        def done(wire: Any) -> Session:
+            session = Session.of(wire)
+            self._auth._keep(session, "SIGNED_IN")
+            return session
+
+        return _core.then(self._c._call("POST", "/auth/v1/passkeys/authenticate/verify", json={"ticket": ticket, "credential": dict(credential)}, auth=False), done)
 
 
 class ApiKeys(_Part):

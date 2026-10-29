@@ -18,6 +18,7 @@ from .functions import Functions
 from .lifecycle import Backups, Environments, Releases
 from .mail import Mail, MailTemplates
 from .observe import Alarms, Health, Observability, StatusPage
+from .realtime import Dashboards, RealtimeChannels
 
 __all__ = ["Manage"]
 
@@ -30,6 +31,8 @@ SERVICES: dict[str, type] = {
     "inbound_hooks": InboundHooks, "jobs": Jobs, "functions": Functions,
     # files and mail
     "buckets": Buckets, "cache": Cache, "mail": Mail, "mail_templates": MailTemplates,
+    # realtime and dashboards
+    "realtime_channels": RealtimeChannels, "dashboards": Dashboards,
     # access
     "keys": Keys, "secrets": Secrets, "domains": Domains, "firewall": Firewall,
     # observe
@@ -62,6 +65,8 @@ class Manage:
     cache: Cache
     mail: Mail
     mail_templates: MailTemplates
+    realtime_channels: RealtimeChannels
+    dashboards: Dashboards
     keys: Keys
     secrets: Secrets
     domains: Domains

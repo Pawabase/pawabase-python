@@ -20,12 +20,12 @@ import asyncio
 import contextlib
 import inspect
 import json
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable, Iterator
 from typing import Any
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from . import _core
-from .errors import ConfigError, RealtimeError
+from .errors import ConfigError, RealtimeError, failure
 
 try:  # optional: only a live connection needs it
     import websockets
@@ -38,6 +38,51 @@ HEARTBEAT_SECONDS = 25.0
 ACK_TIMEOUT = 10.0
 
 Handler = Callable[[dict[str, Any]], Any]
+
+
+def _failed(response: Any) -> Exception:
+    try:
+        detail = response.json()
+    except ValueError:
+        detail = response.text
+    return failure(response.status_code, detail, request_id=response.headers.get("x-request-id"))
+
+
+def _frame(data: list[str]) -> dict[str, Any] | None:
+    if not data:
+        return None
+    try:
+        frame = json.loads("\n".join(data))
+    except ValueError:
+        return None
+    return frame if isinstance(frame, dict) else None
+
+
+def _frames(lines: Iterator[str]) -> Iterator[dict[str, Any]]:
+    """The JSON frames of a Server-Sent Events body (``data:`` lines, a blank line between events; comments are skipped)."""
+    data: list[str] = []
+    for line in lines:
+        if line == "":
+            if (frame := _frame(data)) is not None:
+                yield frame
+            data = []
+        elif line.startswith("data:"):
+            data.append(line[5:].removeprefix(" "))
+    if (frame := _frame(data)) is not None:
+        yield frame
+
+
+async def _aframes(lines: AsyncIterator[str]) -> AsyncIterator[dict[str, Any]]:
+    data: list[str] = []
+    async for line in lines:
+        if line == "":
+            if (frame := _frame(data)) is not None:
+                yield frame
+            data = []
+        elif line.startswith("data:"):
+            data.append(line[5:].removeprefix(" "))
+    if (frame := _frame(data)) is not None:
+        yield frame
 
 
 class Realtime:
@@ -68,6 +113,31 @@ class Realtime:
     def history(self, channel: str, limit: int = 50) -> Any:
         """Recent messages on a channel, oldest first."""
         return _core.then(self._c._call("GET", f"/realtime/v1/channels/{_core.key_path(channel)}/history", params={"limit": limit}, retry=True), lambda body: body["messages"])
+
+    def sse(self, channels: list[str] | tuple[str, ...] | str) -> Any:
+        """Listen to channels over Server-Sent Events, one-way and over plain HTTP: iterate the frames (``{"type": "welcome" | "message" |
+        "presence_diff", ...}``). On the sync client it is a generator (``for frame in pb.realtime.sse(["chat:lobby"])``); on the async client an
+        async generator (``async for``). Publish with :meth:`publish`. At most 20 channels per stream; the signed-in user, if any, is who is listening."""
+        names = [channels] if isinstance(channels, str) else list(channels)
+        if not names:
+            raise ConfigError("Pass at least one channel to listen to.")
+        params = _core.compact({"channels": ",".join(names), "token": self._c.auth.access_token})
+        return self._sse_async(params) if self._c.is_async else self._sse_sync(params)
+
+    def _sse_sync(self, params: dict[str, Any]) -> Iterator[dict[str, Any]]:
+        with self._c.stream("GET", "/realtime/v1/sse", params=params, headers={"accept": "text/event-stream"}) as response:
+            if response.status_code >= 400:
+                response.read()
+                raise _failed(response)
+            yield from _frames(response.iter_lines())
+
+    async def _sse_async(self, params: dict[str, Any]) -> AsyncIterator[dict[str, Any]]:
+        async with self._c.stream("GET", "/realtime/v1/sse", params=params, headers={"accept": "text/event-stream"}) as response:
+            if response.status_code >= 400:
+                await response.aread()
+                raise _failed(response)
+            async for frame in _aframes(response.aiter_lines()):
+                yield frame
 
     # ── live (async client) ──────────────────────────────────────────────
 

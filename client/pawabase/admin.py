@@ -194,6 +194,11 @@ class Insight(_Admin):
         """Apply the ``identities`` of a backup. ``dry_run=True`` reports what would change."""
         return self.post("/restore", {"identities": dict(identities), "replace": replace, "dry_run": dry_run})
 
+    def preview_token_profile(self, profile: Mapping[str, Any], user_id: str, *, org: str | None = None) -> Any:
+        """The claims a token profile would put in a token for this user (and organization), without issuing one."""
+        body = {"profile": dict(profile), "user_id": user_id, **({"org": org} if org else {})}
+        return self.post("/token-profiles/preview", body)
+
     def hosted_source(self, page: str, *, branding: Mapping[str, Any] | None = None, form: Mapping[str, Any] | None = None) -> Any:
         """The HTML a hosted sign-in page is served as for the branding being edited (the saved branding when omitted)."""
         return self.post("/hosted-source", {"page": page, **({"branding": dict(branding)} if branding is not None else {}), **({"form": dict(form)} if form is not None else {})})

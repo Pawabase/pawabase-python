@@ -26,6 +26,10 @@ class Keys(Service):
             body["expires_at"] = expires_at.isoformat() if isinstance(expires_at, datetime) else expires_at
         return self.post("/keys", body)
 
+    def scopes(self) -> Any:
+        """Every scope a key can hold, with what each allows (the choices for ``create(scopes=...)``)."""
+        return self._c._call("GET", "/platform/v1/key-scopes", retry=True)
+
     def revoke(self, key_id: str) -> Any:
         return self.post(seg("keys", key_id, "revoke"))
 
