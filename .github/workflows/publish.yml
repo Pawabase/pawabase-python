@@ -1,35 +1,85 @@
-name: publish
-# Publishes to PyPI when you push a tag like v0.3.0 (the tag must match pawabase/__init__.py).
+name: Release on Tag
+
 on:
   push:
-    tags: ["v*"]
+    tags:
+      - 'pawabase-v*'  # Python SDK releases: pawabase-v0.3.1
 
 jobs:
-  test:
+  release:
+    name: Build and Publish to PyPI
     runs-on: ubuntu-latest
-    defaults: { run: { working-directory: client } }
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.12" }
-      - run: pip install -e '.[test]'
-      - run: pytest -q
 
-  publish:
-    needs: test
-    runs-on: ubuntu-latest
-    environment: pypi
     permissions:
-      id-token: write           # PyPI trusted publishing: no token stored in GitHub
-    defaults: { run: { working-directory: client } }
+      contents: read        # actions/checkout needs repo read access
+      id-token: write       # for OIDC (trusted publishing), used when PYPI_TOKEN is not set
+
+    defaults:
+      run:
+        working-directory: client
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.12" }
-      - name: The tag matches the package version
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from tag
+        id: version
         run: |
-          version=$(python -c "import re,pathlib;print(re.search(r'__version__ = \"([^\"]+)\"', pathlib.Path('pawabase/__init__.py').read_text()).group(1))")
-          test "v$version" = "${GITHUB_REF_NAME}" || { echo "tag ${GITHUB_REF_NAME} != v$version"; exit 1; }
-      - run: pip install build && python -m build
-      - uses: pypa/gh-action-pypi-publish@release/v1
-        with: { packages-dir: client/dist }
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#pawabase-v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Releasing pawabase v$VERSION"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      # The version is read from pawabase/__init__.py (hatch). Without this a tag
+      # of pawabase-v0.3.1 against a package still saying 0.3.0 would publish
+      # 0.3.0 and report success.
+      - name: The tag and __version__ must agree
+        run: |
+          TAG_VERSION="${{ steps.version.outputs.version }}"
+          MOD_VERSION=$(python -c "import re,pathlib; print(re.search(r'__version__.*?\"(.*?)\"', pathlib.Path('pawabase/__init__.py').read_text()).group(1))")
+          if [ "$TAG_VERSION" != "$MOD_VERSION" ]; then
+            echo "::error::Tag says $TAG_VERSION, pawabase/__init__.py says $MOD_VERSION."
+            exit 1
+          fi
+          echo "both say $MOD_VERSION"
+
+      - name: Clean Old Builds
+        run: |
+          rm -rf dist build *.egg-info
+
+      - name: Setup Virtual Environment
+        run: uv venv
+
+      - name: Install dependencies
+        run: uv pip install -e ".[test]"
+
+      - name: Run tests
+        run: uv run pytest tests/ -q --tb=short
+
+      - name: Build the package
+        run: uv build
+
+      # Prefers an API token when the PYPI_TOKEN secret is set; falls back to OIDC
+      # trusted publishing. Passing an empty --token is a hard failure, so the
+      # secret must not be forwarded blindly.
+      - name: Publish to PyPI
+        env:
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          if [ -n "$PYPI_TOKEN" ]; then
+            uv publish --token "$PYPI_TOKEN"
+          else
+            uv publish
+          fi
