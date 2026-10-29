@@ -1,0 +1,35 @@
+name: publish
+# Publishes to PyPI when you push a tag like v0.3.0 (the tag must match pawabase/__init__.py).
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: client } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -e '.[test]'
+      - run: pytest -q
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write           # PyPI trusted publishing: no token stored in GitHub
+    defaults: { run: { working-directory: client } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: The tag matches the package version
+        run: |
+          version=$(python -c "import re,pathlib;print(re.search(r'__version__ = \"([^\"]+)\"', pathlib.Path('pawabase/__init__.py').read_text()).group(1))")
+          test "v$version" = "${GITHUB_REF_NAME}" || { echo "tag ${GITHUB_REF_NAME} != v$version"; exit 1; }
+      - run: pip install build && python -m build
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with: { packages-dir: client/dist }
