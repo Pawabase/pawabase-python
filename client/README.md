@@ -33,9 +33,9 @@ posts.where(status="live", views={"gte": 10}).all()          # a list
 posts.eq("slug", "hello").single()                           # NotFoundError if none
 posts.eq("status", "draft").count()
 
-row = posts.create({"title": "Hello"})
+row = posts.create(title="Hello")
 posts.get(row["id"], expand=["author"])
-posts.update(row["id"], {"title": "Hello, world"})           # PATCH
+posts.update(row["id"], title="Hello, world")                # PATCH
 posts.delete(row["id"])
 posts.create_many(rows)                                      # failures are collected, not raised
 ```
@@ -83,9 +83,9 @@ avatars.create_share_link("report.pdf", expires_in=3600)     # for people with n
 ## Functions, flows, routes
 
 ```python
-pb.functions.invoke("orders.create", {"sku": "A1"})          # branch="my-feature" runs a branch's version
-pb.flows.invoke("welcome", {"email": "ada@example.com"})
-pb.routes.post("orders/42/pay", {"method": "card"})
+pb.functions.invoke("orders.create", sku="A1")                # branch="my-feature" runs a branch's version
+pb.flows.invoke("welcome", email="ada@example.com")
+pb.routes.post("orders/42/pay", method="card")
 ```
 
 ## Realtime

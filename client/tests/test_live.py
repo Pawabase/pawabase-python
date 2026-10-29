@@ -54,17 +54,17 @@ def pb(admin):
 
 def test_records_end_to_end(pb):
     items = pb.from_(RESOURCE)
-    first = items.create({"title": "one", "views": 3})
-    items.create({"title": "two", "views": 9, "done": True})
+    first = items.create(title="one", views=3)
+    items.create(title="two", views=9, done=True)
     assert items.get(first["id"])["title"] == "one"
-    assert items.update(first["id"], {"views": 4})["views"] == 4
+    assert items.update(first["id"], views=4)["views"] == 4
     assert [r["title"] for r in items.gte("views", 5).execute().data] == ["two"]
     assert [r["title"] for r in items.eq("done", True).execute().data] == ["two"]  # booleans go through `is`
     assert [r["title"] for r in items.eq("done", False).execute().data] == ["one"]
     assert [r["title"] for r in items.order("-views").all()] == ["two", "one"]
     assert items.count() == 2 and items.eq("title", "one").exists()
     with pytest.raises(ConflictError):
-        items.create({"title": "one"})
+        items.create(title="one")
     items.delete(first["id"])
     with pytest.raises(NotFoundError):
         items.get(first["id"])
@@ -102,7 +102,7 @@ def test_storage_end_to_end(pb):
 def test_functions_and_flows_and_the_management_plane(pb, admin):
     functions = [f["name"] for f in admin.manage.functions.list()["data"]]
     if "greet.hello" in functions:
-        assert pb.functions.invoke("greet.hello", {"name": "Ada"}) == {"message": "Hello, Ada!"}
+        assert pb.functions.invoke("greet.hello", name="Ada") == {"message": "Hello, Ada!"}
     assert admin.manage.resources.list()["data"]
     assert admin.manage.flows.list()["data"] is not None
     assert isinstance(admin.admin.users.search()["data"], list)
@@ -111,7 +111,7 @@ def test_functions_and_flows_and_the_management_plane(pb, admin):
 
 async def test_the_async_client_and_live_realtime(admin):
     async with AsyncPawabase(URL, PUBLISHABLE, environment=ENV) as apb:
-        created = await apb.from_(RESOURCE).create({"title": "async"})
+        created = await apb.from_(RESOURCE).create(title="async")
         assert (await apb.from_(RESOURCE).eq("title", "async").single())["id"] == created["id"]
         assert await apb.from_(RESOURCE).count() >= 1
         status = await apb.status()

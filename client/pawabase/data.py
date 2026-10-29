@@ -450,14 +450,15 @@ class _ResourceBase:
         """One record by id; :class:`~pawabase.errors.NotFoundError` when it does not exist or the policy hides it."""
         return self._client._call("GET", self._path(record_id), params=_expand_params(expand), retry=True)
 
-    def create(self, values: Mapping[str, Any]) -> Any:
+    def create(self, **values: Any) -> Any:
+        """Create a record with named fields: ``posts.create(title="Hello", views=0)``."""
         return self._client._call("POST", self._path(), json=_json(values))
 
-    def update(self, record_id: Any, values: Mapping[str, Any]) -> Any:
+    def update(self, record_id: Any, **values: Any) -> Any:
         """Change some fields (PATCH). A required field cannot be set to ``None``."""
         return self._client._call("PATCH", self._path(record_id), json=_json(values))
 
-    def replace(self, record_id: Any, values: Mapping[str, Any]) -> Any:
+    def replace(self, record_id: Any, **values: Any) -> Any:
         """Replace the record (PUT)."""
         return self._client._call("PUT", self._path(record_id), json=_json(values))
 
@@ -504,7 +505,7 @@ class Resource(_ResourceBase):
         result = CreateManyResult()
         for index, row in enumerate(rows):
             try:
-                result.created.append(self.create(row))
+                result.created.append(self.create(**dict(row)))
             except Exception as error:  # noqa: BLE001 - one bad row must not hide the others
                 result.failed.append((index, error))
                 if stop_on_error:
@@ -554,7 +555,7 @@ class AsyncResource(_ResourceBase):
                 if stop:
                     return
                 try:
-                    slots[index] = await self.create(row)
+                    slots[index] = await self.create(**dict(row))
                 except Exception as error:  # noqa: BLE001
                     result.failed.append((index, error))
                     stop = stop or stop_on_error

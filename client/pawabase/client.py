@@ -8,7 +8,7 @@ holds: it bypasses policies, administers users (``pb.admin``) and manages the en
     pb.auth.sign_in_with_password(email="ada@example.com", password="…")
     posts = pb.from_("posts").eq("status", "live").order("created_at", "desc").limit(10).execute()
     pb.storage.from_("avatars").upload("ada.png", data, content_type="image/png")
-    pb.functions.invoke("orders.create", {"sku": "A1"})
+    pb.functions.invoke("orders.create", sku="A1")
 
 Everything is written once against ``_call``, which a blocking client answers with a value and an async client with an awaitable.
 """
@@ -85,7 +85,7 @@ class _Base:
     # ── data ─────────────────────────────────────────────────────────────
 
     def from_(self, resource: str) -> Any:
-        """A resource's records: ``pb.from_("posts").eq("status", "live").execute()``, ``.get(id)``, ``.create({...})``."""
+        """A resource's records: ``pb.from_("posts").eq("status", "live").execute()``, ``.get(id)``, ``.create(title="Hello")``."""
         return self.resource_class(self, resource)
 
     table = from_

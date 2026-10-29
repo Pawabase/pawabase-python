@@ -125,7 +125,7 @@ def test_the_account_surface(wire, pb):
 def test_quota_refusals_have_their_own_error(wire, pb):
     wire.answer(httpx.Response(403, json={"error": "quota_exceeded", "message": "full", "details": {"limit": "max_webhooks", "allowed": 3, "used": 3}}))
     with pytest.raises(QuotaExceededError) as raised:
-        pb.from_("posts").create({})
+        pb.from_("posts").create()
     assert raised.value.details["limit"] == "max_webhooks"
 
 

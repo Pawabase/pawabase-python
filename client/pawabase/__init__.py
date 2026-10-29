@@ -8,7 +8,7 @@ Talk to a Pawabase environment from an app, a script or a server:
     pb.auth.sign_in_with_password(email="ada@example.com", password="…")
     posts = pb.from_("posts").eq("status", "live").order("-created_at").limit(10).execute()
     pb.storage.from_("avatars").upload("ada.png", data)
-    pb.functions.invoke("orders.create", {"sku": "A1"})
+    pb.functions.invoke("orders.create", sku="A1")
 
 * ``pb.from_(resource)``    records: queries, create, update, delete       (:mod:`pawabase.data`)
 * ``pb.auth``               accounts, sessions, MFA, devices, API keys, organizations (:mod:`pawabase.auth`)

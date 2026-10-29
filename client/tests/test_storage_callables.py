@@ -46,11 +46,11 @@ def test_share_links_need_a_secret_key(wire, pb):
 
 def test_functions_flows_and_routes(wire, pb):
     wire.answer(httpx.Response(200, json={"data": {"ok": True}}))
-    assert pb.functions.invoke("orders.create", {"sku": "A1"}, branch="feat") == {"ok": True}
+    assert pb.functions.invoke("orders.create", sku="A1", branch="feat") == {"ok": True}
     assert wire.last.url.path == "/functions/v1/orders.create" and wire.query() == {"branch": "feat"} and wire.json() == {"sku": "A1"}
     wire.answer(httpx.Response(200, json={"sum": 42}))
-    assert pb.flows.invoke("demo", {"a": 1}) == {"sum": 42} and wire.last.url.path == "/flows/v1/demo"
-    pb.routes.post("orders/42/pay", {"m": "card"})
+    assert pb.flows.invoke("demo", a=1) == {"sum": 42} and wire.last.url.path == "/flows/v1/demo"
+    pb.routes.post("orders/42/pay", m="card")
     assert wire.last.url.path == "/rest/v1/orders/42/pay" and wire.last.method == "POST"
 
 

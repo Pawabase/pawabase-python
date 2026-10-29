@@ -57,12 +57,12 @@ def test_where_takes_keywords_and_operators(wire, pb):
 
 def test_single_record_writes_and_reads(wire, pb):
     wire.answer(httpx.Response(201, json={"id": "7", "title": "Hi"}))
-    assert pb.from_("posts").create({"title": "Hi"})["id"] == "7"
+    assert pb.from_("posts").create(title="Hi")["id"] == "7"
     assert wire.last.method == "POST" and wire.json() == {"title": "Hi"}
     wire.answer(httpx.Response(200, json={"id": "7"}))
     pb.from_("posts").get("7", expand=["author"])
     assert wire.last.url.path == "/rest/v1/posts/7" and wire.query() == {"expand": "author"}
-    pb.from_("posts").update("7", {"title": "New"})
+    pb.from_("posts").update("7", title="New")
     assert wire.last.method == "PATCH" and wire.json() == {"title": "New"}
     wire.answer(httpx.Response(204))
     assert pb.from_("posts").delete("7") is None and wire.last.method == "DELETE"
@@ -75,7 +75,7 @@ def test_missing_records_and_conflicts_are_typed_errors(wire, pb):
     assert pb.from_("posts").maybe_get("x") is None
     wire.answer(httpx.Response(409, json={"error": "unique_violation", "message": "taken", "details": {"columns": ["email"]}}))
     with pytest.raises(ConflictError) as raised:
-        pb.from_("users").create({"email": "a@x.io"})
+        pb.from_("users").create(email="a@x.io")
     assert raised.value.code == "unique_violation" and raised.value.details == {"columns": ["email"]}
 
 
@@ -106,7 +106,7 @@ async def test_the_async_client_has_the_same_methods(wire, apb):
     assert [r["id"] async for r in apb.from_("posts").eq("status", "live").iterate()] == ["1", "2"]
     assert (await apb.from_("posts").eq("status", "live").first())["id"] == "1"
     wire.answer(httpx.Response(201, json={"id": "9"}))
-    assert (await apb.from_("posts").create({"t": 1}))["id"] == "9"
+    assert (await apb.from_("posts").create(t=1))["id"] == "9"
     wire.answer(httpx.Response(200, json={"data": [], "page": 1, "per_page": 1, "total": 12}))
     assert await apb.from_("posts").count() == 12
 
