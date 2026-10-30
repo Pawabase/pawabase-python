@@ -44,10 +44,7 @@ def test_share_links_need_a_secret_key(wire, pb):
     assert wire.last.url.path == "/platform/v1/envs/development/buckets/av/shares" and wire.json()["permissions"] == "view"
 
 
-def test_functions_flows_and_routes(wire, pb):
-    wire.answer(httpx.Response(200, json={"data": {"ok": True}}))
-    assert pb.functions.invoke("orders.create", sku="A1", branch="feat") == {"ok": True}
-    assert wire.last.url.path == "/functions/v1/orders.create" and wire.query() == {"branch": "feat"} and wire.json() == {"sku": "A1"}
+def test_flows_and_routes(wire, pb):
     wire.answer(httpx.Response(200, json={"sum": 42}))
     assert pb.flows.invoke("demo", a=1) == {"sum": 42} and wire.last.url.path == "/flows/v1/demo"
     pb.routes.post("orders/42/pay", m="card")
@@ -66,19 +63,3 @@ async def test_realtime_over_http_and_the_async_only_channel(wire):
     wire.answer(httpx.Response(200, json={"messages": [{"id": "1"}]}))
     assert await make_async(wire).realtime.history("c", 5) == [{"id": "1"}]
     assert isinstance(blocking, Pawabase)
-
-
-def test_http_functions_are_called_with_any_method_and_path_and_errors_are_returned(wire, pb):
-    wire.answer(httpx.Response(404, json={"error": "not_found"}))
-    r = pb.functions.request("orders", "/42/items", method="put", json={"sku": "A1"}, params={"q": "x"}, branch="feat")
-    assert r.status_code == 404 and r.json() == {"error": "not_found"}
-    assert wire.last.method == "PUT" and wire.last.url.path == "/functions/v1/orders/42/items" and wire.query() == {"q": "x"}
-    assert wire.last.headers["x-pawabase-branch"] == "feat" and wire.json() == {"sku": "A1"}
-    wire.answer(httpx.Response(200, text="hi"))
-    assert pb.functions.request("orders").text == "hi" and wire.last.method == "GET" and wire.last.url.path == "/functions/v1/orders"
-
-
-async def test_http_functions_on_the_async_client(wire):
-    wire.answer(httpx.Response(201, json={"ok": True}))
-    r = await make_async(wire).functions.request("hook", content="raw")
-    assert r.status_code == 201 and wire.last.method == "POST" and wire.last.content == b"raw"

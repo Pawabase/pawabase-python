@@ -14,7 +14,6 @@ from .access import Domains, Firewall, Keys, Secrets
 from .automation import Events, Flows, InboundHooks, Jobs, Schedules, Subscriptions, Webhooks
 from .data import Database, Policies, Resources, Routes, Runtime, Schema, Schemas, Transformers
 from .files import Buckets, Cache
-from .functions import Functions
 from .lifecycle import Backups, Environments, Releases
 from .mail import Mail, MailTemplates
 from .observe import Alarms, Health, Observability, StatusPage
@@ -28,7 +27,7 @@ SERVICES: dict[str, type] = {
     "database": Database, "runtime": Runtime,
     # automation
     "flows": Flows, "schedules": Schedules, "subscriptions": Subscriptions, "events": Events, "webhooks": Webhooks,
-    "inbound_hooks": InboundHooks, "jobs": Jobs, "functions": Functions,
+    "inbound_hooks": InboundHooks, "jobs": Jobs,
     # files and mail
     "buckets": Buckets, "cache": Cache, "mail": Mail, "mail_templates": MailTemplates,
     # realtime and dashboards
@@ -60,7 +59,6 @@ class Manage:
     webhooks: Webhooks
     inbound_hooks: InboundHooks
     jobs: Jobs
-    functions: Functions
     buckets: Buckets
     cache: Cache
     mail: Mail

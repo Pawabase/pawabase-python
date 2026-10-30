@@ -8,17 +8,16 @@ Talk to a Pawabase environment from an app, a script or a server:
     pb.auth.sign_in_with_password(email="ada@example.com", password="…")
     posts = pb.from_("posts").eq("status", "live").order("-created_at").limit(10).execute()
     pb.storage.from_("avatars").upload("ada.png", data)
-    pb.functions.invoke("orders.create", sku="A1")
+    pb.flows.invoke("welcome", email="ada@example.com")
 
 * ``pb.from_(resource)``    records: queries, create, update, delete       (:mod:`pawabase.data`)
 * ``pb.auth``               accounts, sessions, MFA, devices, API keys, organizations (:mod:`pawabase.auth`)
 * ``pb.storage``            buckets, objects, signed links, image transforms (:mod:`pawabase.storage`)
-* ``pb.functions`` / ``pb.flows`` / ``pb.routes``  call what you have defined (:mod:`pawabase.callables`)
+* ``pb.flows`` / ``pb.routes``  call what you have defined (:mod:`pawabase.callables`)
 * ``pb.realtime``           channels, presence, live record changes        (:mod:`pawabase.realtime`)
 * ``pb.admin``              manage users with a secret key                  (:mod:`pawabase.admin`)
 * ``pb.manage``             configure the environment with a secret key     (:mod:`pawabase.manage`)
 
-Writing functions that run *on* Pawabase (and the ``pawabase`` command) is a separate package: ``pawabase-functions``.
 """
 
 from __future__ import annotations

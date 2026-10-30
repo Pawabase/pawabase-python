@@ -59,6 +59,25 @@ class Users(_Admin):
         """The user's recent sign-ins and security events."""
         return self.get(seg("users", user_id, "history"))
 
+    def activity(self, user_id: str, *, weeks: int = 53) -> Any:
+        """What the user did over the last ``weeks`` weeks (at most 53): counts per day by kind (``signin``, ``account``, ``request``),
+        totals and a summary (last seen, failures, busiest hour, most used routes)."""
+        return self.get(seg("users", user_id, "activity"), weeks=weeks)
+
+    def timeline(self, user_id: str, *, type: str | None = None, limit: int = 50, before: str | None = None) -> Any:
+        """The user's sign-ins, account changes and requests in one feed, newest first. ``type``: ``signin``, ``account`` or ``request``.
+        Pass the answer's ``next_before`` as ``before`` for the next page."""
+        return self.get(seg("users", user_id, "timeline"), type=type, limit=limit, before=before)
+
+    def export_data(self, user_id: str) -> Any:
+        """Everything the auth service holds about the user, as JSON (a data-access request). Records that the request was handled.
+        Rows in your own tables are not included: they are your application's to export."""
+        return self.post(seg("users", user_id, "privacy", "export"))
+
+    def erase_data(self, user_id: str, *, confirm: str) -> Any:
+        """Delete the user and clear everything that could identify them (an erasure request). Final. ``confirm`` is their email address."""
+        return self.post(seg("users", user_id, "privacy", "erase"), {"confirm": confirm})
+
     def reset_mfa(self, user_id: str) -> Any:
         """Remove the user's second factors, so they can sign in with a password alone and enrol again."""
         return self.post(seg("users", user_id, "mfa", "reset"))
@@ -86,6 +105,12 @@ class Users(_Admin):
     def api_keys(self, user_id: str) -> Any:
         """The user's own API keys (never the secrets)."""
         return self.get(seg("users", user_id, "api-keys"))
+
+
+class Privacy(_Admin):
+    def requests(self, *, limit: int = 50) -> Any:
+        """The data requests handled so far (exports and erasures). They hold no personal data: the person's id and a hash of their address."""
+        return self.get("/privacy/requests", limit=limit)
 
 
 class Roles(_Admin):
@@ -213,6 +238,7 @@ class Admin:
     api_keys: ApiKeys
     devices: Devices
     insight: Insight
+    privacy: Privacy
 
     def __init__(self, client: Any, environment: str | None = None) -> None:
         self._client = client
@@ -225,6 +251,7 @@ class Admin:
         self.api_keys = ApiKeys(client, environment)
         self.devices = Devices(client, environment)
         self.insight = Insight(client, environment)
+        self.privacy = Privacy(client, environment)
 
     def environment(self, name: str) -> Admin:
         return Admin(self._client, name)

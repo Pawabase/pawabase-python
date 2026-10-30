@@ -1,12 +1,10 @@
 # pawabase-python
 
-The Python **client SDK** for [Pawabase](https://github.com/Pawabase/pawabase), in [`client/`](client): records, auth, storage, functions, flows, realtime,
+The Python **client SDK** for [Pawabase](https://github.com/Pawabase/pawabase), in [`client/`](client): records, auth, storage, flows, realtime,
 user administration (`pb.admin`) and environment management (`pb.manage`). Blocking and async.
 
-The function kit and the `pawabase` command are a separate package in their own repository, `pawabase-functions` (`../python-functions` here). It depends on
-this one, and both install into the same `pawabase` namespace, so an app that only calls Pawabase installs just `pawabase`.
-
-The JavaScript counterparts are separate packages too: `@pawabase/client` (`../js`) and `@pawabase/functions` (`../js-functions`).
+The function kit and the `pawabase` command (`pawabase-functions`, `../python-functions`) are for a Functions feature the server no longer has, so they
+do not work with the current server. The JavaScript counterpart is `@pawabase/client` (`../js`).
 
 ```bash
 pip install -e ./client

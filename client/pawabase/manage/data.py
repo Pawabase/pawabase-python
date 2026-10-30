@@ -93,7 +93,7 @@ class Schema(Service):
 
 
 class Policies(Definitions):
-    """Named access policies (conditions) that resources, buckets, channels and functions refer to."""
+    """Named access policies (conditions) that resources, buckets and channels refer to."""
 
     kind = "policies"
 

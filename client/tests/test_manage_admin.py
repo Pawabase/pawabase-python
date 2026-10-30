@@ -32,9 +32,9 @@ def test_definitions_use_names_and_branches(wire, sk):
 
 
 def test_keys_and_secrets(wire, sk):
-    sk.manage.keys.create("ci", role="secret", scopes=["functions:invoke"], allowed_ips=["10.0.0.0/8"])
+    sk.manage.keys.create("ci", role="secret", scopes=["routes:invoke"], allowed_ips=["10.0.0.0/8"])
     assert wire.last.url.path == f"{BASE}/keys" and wire.json() == {
-        "name": "ci", "role": "secret", "scopes": ["functions:invoke"], "allowed_ips": ["10.0.0.0/8"], "allowed_routes": [],
+        "name": "ci", "role": "secret", "scopes": ["routes:invoke"], "allowed_ips": ["10.0.0.0/8"], "allowed_routes": [],
     }
     sk.manage.keys.rotate("k1", grace_hours=2)
     assert wire.last.url.path == f"{BASE}/keys/k1/rotate" and wire.json() == {"grace_hours": 2}
@@ -104,6 +104,10 @@ def test_user_administration_is_environment_scoped(wire, sk):
     assert wire.last.url.path == f"{BASE}/auth/orgs/acme/members"
     sk.admin.environment("staging").users.search(status="locked")
     assert wire.last.url.path == "/platform/v1/envs/staging/auth/users" and wire.query()["status"] == "locked"
+    sk.admin.users.activity("u1", weeks=10)
+    assert wire.last.method == "GET" and wire.last.url.path == f"{BASE}/auth/users/u1/activity" and wire.query() == {"weeks": "10"}
+    sk.admin.users.timeline("u1", type="account", before="2026-10-30T10:00:00+00:00")
+    assert wire.last.url.path == f"{BASE}/auth/users/u1/timeline" and wire.query() == {"type": "account", "limit": "50", "before": "2026-10-30T10:00:00+00:00"}
     sk.admin.insight.events(failed=True)
     assert wire.query() == {"failed": "true", "limit": "100"}
 
@@ -151,3 +155,13 @@ def test_key_scopes_and_token_profile_preview(wire, sk):
     sk.admin.insight.preview_token_profile({"name": "billing"}, "u1", org="acme")
     assert wire.last.method == "POST" and wire.last.url.path == f"{BASE}/auth/token-profiles/preview"
     assert wire.json() == {"profile": {"name": "billing"}, "user_id": "u1", "org": "acme"}
+
+
+def test_privacy_requests_export_erase_and_list(wire, sk):
+    sk.admin.users.export_data("u1")
+    assert wire.last.method == "POST" and wire.last.url.path == f"{BASE}/auth/users/u1/privacy/export"
+    sk.admin.users.erase_data("u1", confirm="a@b.io")
+    assert wire.last.method == "POST" and wire.last.url.path == f"{BASE}/auth/users/u1/privacy/erase" and wire.json() == {"confirm": "a@b.io"}
+    sk.admin.privacy.requests(limit=5)
+    assert wire.last.method == "GET" and wire.last.url.path == f"{BASE}/auth/privacy/requests" and wire.query() == {"limit": "5"}
+    assert sk.admin.environment("staging").privacy.env == "staging"

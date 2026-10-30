@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Privacy requests and user activity** in `pb.admin`: `users.export_data()` and `users.erase_data(confirm=…)` (data-access and erasure
+  requests; the export covers what the auth service holds, not your own tables), `privacy.requests()`, and `users.activity()` /
+  `users.timeline()` (sign-ins, account changes and requests, per person).
+- **Removed `pb.functions` and `pb.manage.functions`.** The server no longer has `/functions/v1` or the functions management routes;
+  use flows (`pb.flows`) and routes (`pb.routes`). The `pawabase-functions` package is not compatible with the current server.
+
 ## 0.3.0
 
 - **Split into two packages.** `pawabase` (this repository, `client/`) is the client SDK; the function kit and the `pawabase` command

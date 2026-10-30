@@ -99,10 +99,7 @@ def test_storage_end_to_end(pb):
         bucket.download("notes/a b.txt")
 
 
-def test_functions_and_flows_and_the_management_plane(pb, admin):
-    functions = [f["name"] for f in admin.manage.functions.list()["data"]]
-    if "greet.hello" in functions:
-        assert pb.functions.invoke("greet.hello", name="Ada") == {"message": "Hello, Ada!"}
+def test_flows_and_the_management_plane(pb, admin):
     assert admin.manage.resources.list()["data"]
     assert admin.manage.flows.list()["data"] is not None
     assert isinstance(admin.admin.users.search()["data"], list)

@@ -9,7 +9,7 @@ from ._base import Definitions, Service
 
 
 class MailTemplates(Definitions):
-    """Templates (subject, HTML, text) for the mail flows, functions and sign-in send."""
+    """Templates (subject, HTML, text) for the mail flows and sign-in send."""
 
     kind = "mail-templates"
 

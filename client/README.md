@@ -1,6 +1,6 @@
 # pawabase
 
-The Python client SDK for [Pawabase](https://github.com/Pawabase/pawabase): records, auth, storage, functions, flows, realtime, user administration
+The Python client SDK for [Pawabase](https://github.com/Pawabase/pawabase): records, auth, storage, flows, realtime, user administration
 and environment management, for apps, scripts and servers. Blocking and `asyncio` clients with the same methods.
 
 ```bash
@@ -8,7 +8,6 @@ pip install pawabase                     # httpx only
 pip install "pawabase[realtime]"         # + websockets, for live channels
 ```
 
-Writing functions that run *on* Pawabase, and the `pawabase` command, are a separate package: [`pawabase-functions`](https://github.com/Pawabase/pawabase-functions-python).
 
 ```python
 from pawabase import Pawabase
@@ -85,10 +84,9 @@ avatars.create_signed_upload_url("in/x.png", max_bytes=1_000_000)   # a browser 
 avatars.create_share_link("report.pdf", expires_in=3600)     # for people with no account (secret key)
 ```
 
-## Functions, flows, routes
+## Flows and routes
 
 ```python
-pb.functions.invoke("orders.create", sku="A1")                # branch="my-feature" runs a branch's version
 pb.flows.invoke("welcome", email="ada@example.com")
 pb.routes.post("orders/42/pay", method="card")
 ```
@@ -119,6 +117,13 @@ admin.admin.users.create(email="ada@example.com", password="…", roles=["editor
 admin.admin.users.update(user_id, disabled=True)
 admin.admin.orgs.add_member("acme", email="ada@example.com", role="admin")
 
+# What a person did (sign-ins, account changes and requests), and data requests about them
+admin.admin.users.activity(user_id)                              # per-day counts by kind, plus a summary
+admin.admin.users.timeline(user_id, type="account", limit=20)    # newest first; pass next_before as before=
+admin.admin.users.export_data(user_id)                           # everything the auth service holds about them (JSON)
+admin.admin.users.erase_data(user_id, confirm="ada@example.com") # final: deletes them and clears what could identify them
+admin.admin.privacy.requests()                                   # the exports and erasures handled so far
+
 admin.manage.secrets.set("STRIPE_KEY", "sk_live_…")
 admin.manage.firewall.ban("203.0.113.7", seconds=3600)
 admin.manage.jobs.replay(job="send_mail", since_minutes=60, dry_run=True)
@@ -133,7 +138,7 @@ admin.manage.environment("staging").flows.list()      # the same API for another
 | Family | Services |
 | --- | --- |
 | Data | `resources`, `schema`, `policies`, `schemas`, `transformers`, `routes`, `database`, `runtime` |
-| Automation | `flows`, `schedules`, `subscriptions`, `events`, `webhooks`, `inbound_hooks`, `jobs`, `functions` |
+| Automation | `flows`, `schedules`, `subscriptions`, `events`, `webhooks`, `inbound_hooks`, `jobs` |
 | Files and mail | `buckets`, `cache`, `mail`, `mail_templates` |
 | Access | `keys`, `secrets`, `domains`, `firewall` |
 | Observe | `observability`, `alarms`, `status_page`, `health` (service health, plan usage, audit) |

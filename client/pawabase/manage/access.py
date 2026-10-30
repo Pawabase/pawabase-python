@@ -19,8 +19,8 @@ class Keys(Service):
         self, name: str, *, role: str = "publishable", scopes: Sequence[str] = (), expires_at: datetime | str | None = None,
         allowed_ips: Sequence[str] = (), allowed_routes: Sequence[str] = (),
     ) -> Any:
-        """Make a key; the key itself is in the answer once. ``scopes`` limit what it may do (``resource:read``, ``functions:invoke``…), ``allowed_ips`` and
-        ``allowed_routes`` (``"GET /rest/v1/orders"``, ``"/functions/v1/*"``) limit where and what it may call."""
+        """Make a key; the key itself is in the answer once. ``scopes`` limit what it may do (``resource:read``, ``routes:invoke``…), ``allowed_ips`` and
+        ``allowed_routes`` (``"GET /rest/v1/orders"``, ``"/flows/v1/*"``) limit where and what it may call."""
         body: dict[str, Any] = {"name": name, "role": role, "scopes": list(scopes), "allowed_ips": list(allowed_ips), "allowed_routes": list(allowed_routes)}
         if expires_at is not None:
             body["expires_at"] = expires_at.isoformat() if isinstance(expires_at, datetime) else expires_at
@@ -39,7 +39,7 @@ class Keys(Service):
 
 
 class Secrets(Service):
-    """Secrets functions and flows read (``ctx.runtime.secret(name)``). Values are never returned."""
+    """Secrets flows read (``ctx.runtime.secret(name)``). Values are never returned."""
 
     def list(self) -> Any:
         return self.get("/secrets")

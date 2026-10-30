@@ -8,7 +8,7 @@ holds: it bypasses policies, administers users (``pb.admin``) and manages the en
     pb.auth.sign_in_with_password(email="ada@example.com", password="…")
     posts = pb.from_("posts").eq("status", "live").order("created_at", "desc").limit(10).execute()
     pb.storage.from_("avatars").upload("ada.png", data, content_type="image/png")
-    pb.functions.invoke("orders.create", sku="A1")
+    pb.flows.invoke("welcome", email="ada@example.com")
 
 Everything is written once against ``_call``, which a blocking client answers with a value and an async client with an awaitable.
 """
@@ -26,7 +26,7 @@ import httpx
 from . import _core
 from .admin import Admin
 from .auth import Auth, SessionStore
-from .callables import Flows, Functions, Routes
+from .callables import Flows, Routes
 from .data import AsyncResource, Resource
 from .errors import NetworkError, PawabaseError, failure
 from .manage import Manage
@@ -72,7 +72,6 @@ class _Base:
         """Create the modules over this client (again, for a view made by :meth:`as_user`)."""
         self.auth = Auth(self, self._store)
         self.storage = Storage(self)
-        self.functions = Functions(self)
         self.flows = Flows(self)
         self.routes = Routes(self)
         self.realtime = Realtime(self)
@@ -140,7 +139,7 @@ class _Base:
 
     @staticmethod
     def _answer(response: httpx.Response, raw: bool | str) -> Any:
-        if raw == "any":  # the response as it is, error statuses included (HTTP functions)
+        if raw == "any":  # the response as it is, error statuses included (raw responses)
             return response
         if response.is_error:
             raise _failure(response)
