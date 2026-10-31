@@ -56,7 +56,7 @@ pb.auth.sign_out()                                           # scope="global" si
 The session is kept in memory (pass `session_store=FileSessionStore("~/.myapp/session.json")` to stay signed in between runs), its token goes on every
 request, and an expiring or rejected token is renewed with the refresh token. Also: magic links, social sign-in (`oauth_url`, `exchange_code`), email
 verification, password reset, linked identities, `pb.auth.mfa` (authenticator app, emailed codes, recovery codes), `pb.auth.sessions`, `pb.auth.devices`,
-`pb.auth.api_keys` (keys a user makes for themselves), and `pb.auth.orgs` (organizations, members, invitations, teams).
+`pb.auth.api_keys` (keys a user makes for themselves), `pb.auth.machine` and `pb.as_machine(...)` (a service or AI agent signing in with its client id and key), and `pb.auth.orgs` (organizations, members, invitations, teams).
 
 More ways in: guest sessions (`sign_in_anonymously()`, then `upgrade_anonymous(email=…, password=…)` keeps what the guest made), emailed codes
 (`send_email_code(email=…)` then `verify_email_code(email=…, code=…)`), and passkeys (`pb.auth.passkeys`: `register_options` / `register_verify` and
@@ -132,7 +132,7 @@ admin.manage.backups.snapshot("before-launch")
 admin.manage.environment("staging").flows.list()      # the same API for another environment the key may manage
 ```
 
-`pb.admin` administers the people who sign in to your application: `users`, `roles`, `orgs`, `invitations`, `sessions`, `api_keys`, `devices`, `insight`
+`pb.admin` administers the people who sign in to your application: `users`, `roles`, `orgs`, `invitations`, `sessions`, `api_keys`, `machines`, `devices`, `insight`
 (events, statistics, identity backup, hosted pages). `pb.manage` is the environment's management plane, in four families:
 
 | Family | Services |

@@ -165,3 +165,17 @@ def test_privacy_requests_export_erase_and_list(wire, sk):
     sk.admin.privacy.requests(limit=5)
     assert wire.last.method == "GET" and wire.last.url.path == f"{BASE}/auth/privacy/requests" and wire.query() == {"limit": "5"}
     assert sk.admin.environment("staging").privacy.env == "staging"
+
+
+def test_machines_and_their_keys(wire, sk):
+    sk.admin.machines.create(name="report-bot", kind="agent", roles=["reader"], app_metadata={"team": "ops"})
+    assert wire.last.method == "POST" and wire.last.url.path == f"{BASE}/auth/machines"
+    assert wire.json() == {"name": "report-bot", "kind": "agent", "description": "", "roles": ["reader"], "permissions": [], "app_metadata": {"team": "ops"}}
+    sk.admin.machines.disable("m1")
+    assert wire.last.method == "PATCH" and wire.last.url.path == f"{BASE}/auth/machines/m1" and wire.json() == {"disabled": True}
+    sk.admin.machines.update("m1", clear_org=True)
+    assert wire.json() == {"org": None}
+    sk.admin.machines.create_key("m1", name="prod", scopes=["orders:*"], expires_in_days=30)
+    assert wire.last.url.path == f"{BASE}/auth/machines/m1/keys" and wire.json() == {"name": "prod", "scopes": ["orders:*"], "expires_in_days": 30}
+    sk.admin.machines.revoke_key("m1", "k1")
+    assert wire.last.method == "DELETE" and wire.last.url.path == f"{BASE}/auth/machines/m1/keys/k1"

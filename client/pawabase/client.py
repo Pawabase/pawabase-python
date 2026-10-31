@@ -112,6 +112,18 @@ class _Base:
         view.auto_refresh = False
         return view
 
+    def as_machine(self, *, client_id: str, client_secret: str, scope: str | None = None, **headers: str) -> Any:
+        """A view of this client that acts as a machine (a service or an AI agent): it signs in with the machine's id and key, then behaves
+        like :meth:`as_user` with the token it got. The token lives ``expires_in`` seconds (15 minutes by default); take a new view when it ends.
+
+            agent = pb.as_machine(client_id=os.environ["PB_MACHINE_ID"], client_secret=os.environ["PB_MACHINE_KEY"])
+            agent.from_("orders")...
+        """
+        return _core.then(
+            self.auth.machine.token(client_id=client_id, client_secret=client_secret, scope=scope),
+            lambda answer: self.as_user(answer["access_token"], **headers),
+        )
+
     def url_for(self, path: str, **query: Any) -> str:
         """An absolute URL on the gateway (for links you hand out)."""
         return self.url + path + (("?" + str(httpx.QueryParams(_core.compact(query)))) if _core.compact(query) else "")

@@ -196,3 +196,16 @@ def test_integration_tokens_and_their_public_keys(wire, pb):
     wire.answer(httpx.Response(200, json={"keys": [{"kid": "k1"}]}))
     assert pb.auth.jwks()["keys"][0]["kid"] == "k1"
     assert wire.last.url.path.startswith("/auth/v1/token-keys/") and wire.last.url.path.endswith("/jwks")
+
+
+def test_a_machine_trades_its_key_for_a_token_and_acts_with_it(wire, pb):
+    token = {"access_token": "agent-token", "token_type": "Bearer", "expires_in": 900, "scope": "orders:read", "machine": {"id": "m1", "name": "bot", "kind": "agent"}}
+    wire.answer(httpx.Response(200, json=token))
+    got = pb.auth.machine.token(client_id="m1", client_secret="pbm_secret", scope="orders:read")
+    assert got["access_token"] == "agent-token" and wire.last.url.path == "/auth/v1/token"
+    assert wire.json() == {"grant_type": "client_credentials", "client_id": "m1", "client_secret": "pbm_secret", "scope": "orders:read"}
+    assert "authorization" not in wire.last.headers
+    agent = pb.as_machine(client_id="m1", client_secret="pbm_secret")
+    wire.answer(httpx.Response(200, json=[]))
+    agent.from_("orders").execute()
+    assert wire.last.headers["authorization"] == "Bearer agent-token"

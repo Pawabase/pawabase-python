@@ -142,6 +142,7 @@ class Auth:
         self.sessions = Sessions(self)
         self.devices = Devices(self)
         self.api_keys = ApiKeys(self)
+        self.machine = Machine(self)
         self.orgs = Orgs(self)
         self.passkeys = Passkeys(self)
 
@@ -534,6 +535,19 @@ class Passkeys(_Part):
             return session
 
         return _core.then(self._c._call("POST", "/auth/v1/passkeys/authenticate/verify", json={"ticket": ticket, "credential": dict(credential)}, auth=False), done)
+
+
+class Machine(_Part):
+    """Machines (services and AI agents) signing in with a client id and a key (``pbm_…``)."""
+
+    def token(self, *, client_id: str, client_secret: str, scope: str | None = None) -> Any:
+        """The OAuth ``client_credentials`` grant: an access token for the machine, keeping no session.
+
+        The answer has ``access_token``, ``token_type``, ``expires_in`` (seconds), ``scope`` (the permissions it carries) and ``machine``.
+        ``scope`` (space-separated permissions) asks for fewer permissions than the key allows; it never grants more.
+        """
+        body = _core.compact({"grant_type": "client_credentials", "client_id": client_id, "client_secret": client_secret, "scope": scope})
+        return self._c._call("POST", "/auth/v1/token", json=body, auth=False)
 
 
 class ApiKeys(_Part):

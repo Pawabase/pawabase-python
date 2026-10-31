@@ -194,6 +194,66 @@ class ApiKeys(_Admin):
         return self.delete(seg("api-keys", key_id))
 
 
+class Machines(_Admin):
+    """Machine identities: services and AI agents that call your API as themselves, with roles and keys of their own.
+
+    Turn them on in the directory settings (``directory.machines.enabled``).
+    """
+
+    def list(self) -> Any:
+        return self.get("/machines")
+
+    def get_machine(self, machine_id: str) -> Any:
+        """One machine, with its keys (never the secrets)."""
+        return self.get(seg("machines", machine_id))
+
+    def create(
+        self, *, name: str, kind: str = "service", description: str = "", roles: Sequence[str] = (), permissions: Sequence[str] = (),
+        org: str | None = None, app_metadata: Mapping[str, Any] | None = None,
+    ) -> Any:
+        """``kind`` is ``agent`` for an AI agent or ``service`` for a job, backend or pipeline. ``roles`` and ``permissions`` are what it may do."""
+        body: dict[str, Any] = {"name": name, "kind": kind, "description": description, "roles": list(roles), "permissions": list(permissions)}
+        if org is not None:
+            body["org"] = org
+        if app_metadata:
+            body["app_metadata"] = dict(app_metadata)
+        return self.post("/machines", body)
+
+    def update(
+        self, machine_id: str, *, name: str | None = None, description: str | None = None, roles: Sequence[str] | None = None,
+        permissions: Sequence[str] | None = None, org: str | None = None, clear_org: bool = False,
+        app_metadata: Mapping[str, Any] | None = None, disabled: bool | None = None,
+    ) -> Any:
+        """Change what is given. ``roles`` and ``permissions`` replace the existing lists; ``clear_org=True`` removes the organization."""
+        given: dict[str, Any] = {"name": name, "description": description, "roles": None if roles is None else list(roles),
+                                 "permissions": None if permissions is None else list(permissions), "org": org,
+                                 "app_metadata": None if app_metadata is None else dict(app_metadata), "disabled": disabled}
+        body = {k: v for k, v in given.items() if v is not None}
+        if clear_org:
+            body["org"] = None
+        return self.patch(seg("machines", machine_id), body)
+
+    def disable(self, machine_id: str) -> Any:
+        """Stop every key of the machine at once."""
+        return self.update(machine_id, disabled=True)
+
+    def enable(self, machine_id: str) -> Any:
+        return self.update(machine_id, disabled=False)
+
+    def delete_machine(self, machine_id: str) -> Any:
+        return self.delete(seg("machines", machine_id))
+
+    def create_key(self, machine_id: str, *, name: str = "", scopes: Sequence[str] = (), expires_in_days: int | None = None) -> Any:
+        """Make a key. The secret is in the answer once (``key``) and never again; ``client_id`` is the machine's id."""
+        body: dict[str, Any] = {"name": name, "scopes": list(scopes)}
+        if expires_in_days:
+            body["expires_in_days"] = expires_in_days
+        return self.post(seg("machines", machine_id, "keys"), body)
+
+    def revoke_key(self, machine_id: str, key_id: str) -> Any:
+        return self.delete(seg("machines", machine_id, "keys", key_id))
+
+
 class Devices(_Admin):
     def list(self, *, limit: int | None = None) -> Any:
         """Recent devices people signed in from."""
@@ -236,6 +296,7 @@ class Admin:
     invitations: Invitations
     sessions: Sessions
     api_keys: ApiKeys
+    machines: Machines
     devices: Devices
     insight: Insight
     privacy: Privacy
@@ -249,6 +310,7 @@ class Admin:
         self.invitations = Invitations(client, environment)
         self.sessions = Sessions(client, environment)
         self.api_keys = ApiKeys(client, environment)
+        self.machines = Machines(client, environment)
         self.devices = Devices(client, environment)
         self.insight = Insight(client, environment)
         self.privacy = Privacy(client, environment)
