@@ -36,11 +36,11 @@ class QueryError(ValidationError):
 
 @dataclass
 class Page:
-    """One page of a list: ``data`` rows, the ``page`` and ``per_page`` asked for, and the ``total`` (``None`` when a per-row policy means the server cannot count)."""
+    """One page of a list: ``data`` rows, the ``page`` and ``per_page`` asked for, and the ``total`` (``None`` when a per-row policy means the server cannot count). ``page`` and ``per_page`` are ``None`` for a list fetched with ``paginate(False)``."""
 
     data: list[dict[str, Any]]
-    page: int = 1
-    per_page: int = 20
+    page: int | None = 1
+    per_page: int | None = 20
     total: int | None = None
     raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
 
@@ -55,6 +55,8 @@ class Page:
 
     @property
     def has_next(self) -> bool:
+        if self.per_page is None:
+            return False
         if self.total is not None:
             return self.page * self.per_page < self.total
         return len(self.data) >= self.per_page
@@ -64,7 +66,14 @@ class Page:
         if isinstance(body, list):
             return cls(body, page, per_page, len(body))
         body = body or {}
-        return cls(list(body.get("data") or []), int(body.get("page") or page), int(body.get("per_page") or per_page), body.get("total"), body)
+        unpaged = "page" in body and body["page"] is None
+        return cls(
+            list(body.get("data") or []),
+            None if unpaged else int(body.get("page") or page),
+            None if unpaged else int(body.get("per_page") or per_page),
+            body.get("total"),
+            body,
+        )
 
 
 def _format(value: Any, op: str, column: str) -> str:
@@ -116,7 +125,7 @@ class _Query:
     def __init__(self, client: Any, resource: str, state: dict[str, Any] | None = None) -> None:
         self._client = client
         self.resource = resource
-        self._s: dict[str, Any] = state or {"filters": {}, "sort": [], "select": None, "expand": [], "page": 1, "per_page": None, "empty": False}
+        self._s: dict[str, Any] = state or {"filters": {}, "sort": [], "select": None, "expand": [], "page": 1, "per_page": None, "paginate": True, "empty": False}
 
     def _with(self, **change: Any) -> Any:
         state = {**self._s, "filters": dict(self._s["filters"]), "sort": list(self._s["sort"]), "expand": list(self._s["expand"]), **change}
@@ -216,6 +225,10 @@ class _Query:
 
     limit = per_page
 
+    def paginate(self, paginate: bool = True) -> Any:
+        """``paginate(False)`` returns every match in one response (up to 5000; narrow with filters). ``page`` and ``per_page`` come back ``None``."""
+        return self._with(paginate=paginate)
+
     def _params(self) -> dict[str, Any]:
         s = self._s
         params: dict[str, Any] = {f"filter[{column}]": value for column, value in s["filters"].items()}
@@ -225,6 +238,9 @@ class _Query:
             params["select"] = ",".join(s["select"])
         if s["expand"]:
             params["expand"] = ",".join(dict.fromkeys(s["expand"]))
+        if not s["paginate"]:
+            params["paginate"] = "false"
+            return params
         if s["page"] != 1:
             params["page"] = s["page"]
         if s["per_page"] is not None:
@@ -236,6 +252,8 @@ class _Query:
 
     def _fetch(self) -> Any:
         if self._s["empty"]:
+            if not self._s["paginate"]:
+                return Page([], None, None, 0)
             return Page([], self._s["page"], self._s["per_page"] or 20, 0)
         return _core.then(self._client._call("GET", f"/rest/v1/{_core.key_path(self.resource)}", params=self._params() or None, retry=True), self._page_of)
 
@@ -439,8 +457,8 @@ class _ResourceBase:
         return self.query().execute()
 
     def list(self, *, where: Mapping[str, Any] | None = None, sort: str | Sequence[str] | None = None, select: Sequence[str] | None = None,
-             expand: Sequence[str] | None = None, page: int | None = None, per_page: int | None = None) -> Any:
-        """One page with everything in one call: ``list(where={"status": "live"}, sort="-created_at", per_page=20)``."""
+             expand: Sequence[str] | None = None, page: int | None = None, per_page: int | None = None, paginate: bool = True) -> Any:
+        """One page with everything in one call: ``list(where={"status": "live"}, sort="-created_at", per_page=20)``. ``paginate=False`` returns every match instead."""
         query = self.query().where(where or {})
         for spec in ([s.strip() for s in sort.split(",")] if isinstance(sort, str) else list(sort or [])):
             if spec:
@@ -453,6 +471,8 @@ class _ResourceBase:
             query = query.page(page)
         if per_page:
             query = query.per_page(per_page)
+        if not paginate:
+            query = query.paginate(False)
         return query.execute()
 
     # ── one record ───────────────────────────────────────────────────────

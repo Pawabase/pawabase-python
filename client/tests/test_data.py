@@ -120,3 +120,10 @@ def test_a_connection_failure_is_a_network_error(wire):
     wire.answer(refuse)
     with pytest.raises(NetworkError):
         make(wire).from_("posts").execute()
+
+
+def test_paginate_false_asks_for_every_match_and_drops_page_settings(wire, pb):
+    wire.answer(httpx.Response(200, json={"data": [{"id": "1"}, {"id": "2"}], "page": None, "per_page": None, "total": 2}))
+    result = pb.from_("posts").per_page(5).page(3).paginate(False).execute()
+    assert wire.query() == {"paginate": "false"}
+    assert result.page is None and result.per_page is None and result.has_next is False and len(result) == 2
