@@ -209,3 +209,16 @@ def test_a_machine_trades_its_key_for_a_token_and_acts_with_it(wire, pb):
     wire.answer(httpx.Response(200, json=[]))
     agent.from_("orders").execute()
     assert wire.last.headers["authorization"] == "Bearer agent-token"
+
+
+def test_set_avatar_sends_the_image_and_remove_avatar_deletes_it(wire, pb):
+    wire.answer(httpx.Response(200, json=session()))
+    pb.auth.sign_in_with_password(email="ada@x.io", password="pw")
+    wire.answer(httpx.Response(200, json={**USER, "avatar_url": "http://x/files/a.png"}))
+    user = pb.auth.set_avatar(b"\x89PNG", content_type="image/png")
+    put = next(r for r in wire.requests if r.url.path == "/auth/v1/user/avatar")
+    assert put.method == "PUT" and put.content == b"\x89PNG" and put.headers["content-type"] == "image/png"
+    assert user["avatar_url"] == "http://x/files/a.png"
+    wire.answer(httpx.Response(200, json={**USER, "avatar_url": None}))
+    assert pb.auth.remove_avatar()["avatar_url"] is None
+    assert any(r.method == "DELETE" and r.url.path == "/auth/v1/user/avatar" for r in wire.requests)

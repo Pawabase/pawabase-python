@@ -1,7 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.3.1
 
+- **Profile pictures:** `pb.auth.set_avatar(image)` and `pb.auth.remove_avatar()`. The server stores the picture in a public bucket and sets `avatar_url`.
+- **Optional paging:** `.paginate(False)` on a query, or `list(..., paginate=False)`, returns every match in one response (up to 5000). `Page.page` and
+  `Page.per_page` are `None` for such a result.
+- **AI gateway and vector search:** `pb.ai` (chat, streaming, embeddings, models), `similar()` on records, and `pb.manage.ai`. Error codes are read from
+  OpenAI-style error bodies.
+- **Machine identities:** machine sign-in with `client_credentials`, `pb.as_machine`, and `pb.admin.machines`.
 - **Privacy requests and user activity** in `pb.admin`: `users.export_data()` and `users.erase_data(confirm=…)` (data-access and erasure
   requests; the export covers what the auth service holds, not your own tables), `privacy.requests()`, and `users.activity()` /
   `users.timeline()` (sign-ins, account changes and requests, per person).

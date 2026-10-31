@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from . import _core
+from .storage import _content
 from .errors import ConfigError
 
 REFRESH_SKEW = 30  # seconds before expiry at which a token is renewed
@@ -327,6 +328,27 @@ class Auth:
             return _core.then(self.get_user(), lambda user: (self._emit("USER_UPDATED", self.session), user)[1])
 
         return _core.chain(self._c._call("PATCH", "/auth/v1/user", json=body), after)
+
+    def set_avatar(self, image: Any, *, content_type: str | None = None) -> Any:
+        """Set the signed-in user's picture from an image (``bytes``, an open file or a ``Path``): PNG, JPEG, WebP or GIF.
+
+        It is stored in the environment's public avatar bucket and ``avatar_url`` points at it; the previous picture is removed.
+        """
+        data, guessed = _content(image)
+        declared = content_type or guessed or "application/octet-stream"
+
+        def after(_: Any) -> Any:
+            return _core.then(self.get_user(), lambda user: (self._emit("USER_UPDATED", self.session), user)[1])
+
+        return _core.chain(self._c._call("PUT", "/auth/v1/user/avatar", content=data, headers={"content-type": declared}), after)
+
+    def remove_avatar(self) -> Any:
+        """Remove the signed-in user's picture."""
+
+        def after(_: Any) -> Any:
+            return _core.then(self.get_user(), lambda user: (self._emit("USER_UPDATED", self.session), user)[1])
+
+        return _core.chain(self._c._call("DELETE", "/auth/v1/user/avatar"), after)
 
     def resend_verification(self, *, email: str, redirect_to: str | None = None) -> Any:
         return self._c._call("POST", "/auth/v1/verify/request", json=_core.compact({"email": email, "redirect_to": redirect_to}), auth=False)
