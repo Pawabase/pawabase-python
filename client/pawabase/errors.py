@@ -32,7 +32,9 @@ class PawabaseError(RuntimeError):
 
     def __init__(self, status_code: int, detail: Any, *, request_id: str | None = None) -> None:
         self.status_code, self.detail, self.request_id = status_code, detail, request_id
-        self.code = detail.get("error") if isinstance(detail, dict) and isinstance(detail.get("error"), str) else None
+        named = detail.get("error") if isinstance(detail, dict) else None
+        # Either ``{"error": "code", "message": …}`` or OpenAI's ``{"error": {"message": …, "code": "code"}}`` (the AI gateway).
+        self.code = named if isinstance(named, str) else (named.get("code") if isinstance(named, dict) and isinstance(named.get("code"), str) else None)
         self.message = message_of(detail)
         super().__init__(f"Pawabase API returned {status_code}: {self.message}")
 

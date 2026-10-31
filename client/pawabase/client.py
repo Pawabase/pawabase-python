@@ -25,6 +25,7 @@ import httpx
 
 from . import _core
 from .admin import Admin
+from .ai import Ai
 from .auth import Auth, SessionStore
 from .callables import Flows, Routes
 from .data import AsyncResource, Resource
@@ -72,6 +73,7 @@ class _Base:
         """Create the modules over this client (again, for a view made by :meth:`as_user`)."""
         self.auth = Auth(self, self._store)
         self.storage = Storage(self)
+        self.ai = Ai(self)
         self.flows = Flows(self)
         self.routes = Routes(self)
         self.realtime = Realtime(self)

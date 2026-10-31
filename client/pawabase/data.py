@@ -360,6 +360,17 @@ class _ResourceBase:
         base = f"/rest/v1/{_core.key_path(self.name)}"
         return base if record_id is None else f"{base}/{_core.path_of(record_id)}"
 
+    def similar(
+        self, *, text: str | None = None, vector: Sequence[float] | None = None, field: str | None = None, metric: str = "cosine", limit: int = 10,
+        max_distance: float | None = None,
+    ) -> Any:
+        """Records closest in meaning, closest first, each with a ``distance`` (smaller is closer).
+
+        Give ``text`` (turned into a vector by the field's embedding model) or a ``vector``. Vector fields are left out of the records.
+        """
+        body = _core.compact({"text": text, "vector": list(vector) if vector is not None else None, "field": field, "metric": metric, "limit": limit, "max_distance": max_distance})
+        return self._client._call("POST", f"{self._path()}/similar", json=body)
+
     def query(self) -> Any:
         return self.query_class(self._client, self.name)
 

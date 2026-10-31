@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from .access import Domains, Firewall, Keys, Secrets
+from .ai import Ai
 from .automation import Events, Flows, InboundHooks, Jobs, Schedules, Subscriptions, Webhooks
 from .data import Database, Policies, Resources, Routes, Runtime, Schema, Schemas, Transformers
 from .files import Buckets, Cache
@@ -36,6 +37,8 @@ SERVICES: dict[str, type] = {
     "keys": Keys, "secrets": Secrets, "domains": Domains, "firewall": Firewall,
     # observe
     "observability": Observability, "alarms": Alarms, "status_page": StatusPage, "health": Health,
+    # ai
+    "ai": Ai,
     # lifecycle
     "environments": Environments, "releases": Releases, "backups": Backups,
 }
@@ -73,6 +76,7 @@ class Manage:
     alarms: Alarms
     status_page: StatusPage
     health: Health
+    ai: Ai
     environments: Environments
     releases: Releases
     backups: Backups
