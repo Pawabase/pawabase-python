@@ -209,7 +209,7 @@ class Pawabase(_Base):
 
     def _call(
         self, method: str, path: str, *, json: Any = None, params: Mapping[str, Any] | None = None, retry: bool = False, headers: Mapping[str, str] | None = None,
-        content: Any = None, auth: bool = True, raw: bool = False, timeout: float | None = None,
+        content: Any = None, files: Any = None, data: Any = None, auth: bool = True, raw: bool = False, timeout: float | None = None,
     ) -> Any:
         if auth and self.auth.expiring():
             self.auth.refresh_session()
@@ -218,7 +218,7 @@ class Pawabase(_Base):
         while attempt < self._attempts(retry):
             try:
                 response = self._client.request(
-                    method, path, json=json, params=params, content=content, headers=self._headers_for(auth, headers), timeout=timeout or self.timeout
+                    method, path, json=json, params=params, content=content, files=files, data=data, headers=self._headers_for(auth, headers), timeout=timeout or self.timeout
                 )
             except httpx.TransportError as error:
                 last = NetworkError(0, f"Could not reach {self.url}: {error}")
@@ -269,7 +269,7 @@ class AsyncPawabase(_Base):
 
     async def _call(  # type: ignore[override]
         self, method: str, path: str, *, json: Any = None, params: Mapping[str, Any] | None = None, retry: bool = False, headers: Mapping[str, str] | None = None,
-        content: Any = None, auth: bool = True, raw: bool = False, timeout: float | None = None,
+        content: Any = None, files: Any = None, data: Any = None, auth: bool = True, raw: bool = False, timeout: float | None = None,
     ) -> Any:
         if auth and self.auth.expiring():
             await self._refresh_once()
@@ -278,7 +278,7 @@ class AsyncPawabase(_Base):
         while attempt < self._attempts(retry):
             try:
                 response = await self._client.request(
-                    method, path, json=json, params=params, content=content, headers=self._headers_for(auth, headers), timeout=timeout or self.timeout
+                    method, path, json=json, params=params, content=content, files=files, data=data, headers=self._headers_for(auth, headers), timeout=timeout or self.timeout
                 )
             except httpx.TransportError as error:
                 last = NetworkError(0, f"Could not reach {self.url}: {error}")

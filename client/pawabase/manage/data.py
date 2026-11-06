@@ -1,4 +1,4 @@
-"""The data model: resources (tables), their schema and migrations, policies, schemas, transformers, custom routes, and the database."""
+"""The data model: resources (tables), their schema and migrations, policies, schemas, custom routes, and the database."""
 
 from __future__ import annotations
 
@@ -104,12 +104,6 @@ class Schemas(Definitions):
     kind = "schemas"
 
 
-class Transformers(Definitions):
-    """Transformers that reshape a field's value on the way out (hide, mask, format)."""
-
-    kind = "transformers"
-
-
 class Routes(Definitions):
     """Custom HTTP routes under ``/rest`` that run a flow."""
 
@@ -129,21 +123,19 @@ class Database(Service):
     def rows(self, table: str, *, limit: int | None = None, offset: int | None = None, sort: str | None = None, **filters: Any) -> Any:
         return self.get(seg("database", "tables", table, "rows"), limit=limit, offset=offset, sort=sort, **filters)
 
+    def saved_queries(self) -> Any:
+        """The SQL console's bookmarks."""
+        return self.get("/database/queries")
+
+    def save_query(self, name: str, sql: str, description: str = "") -> Any:
+        return self.post("/database/queries", {"name": name, "sql": sql, "description": description})
+
+    def update_query(self, query_id: str, name: str, sql: str, description: str = "") -> Any:
+        return self.put(seg("database", "queries", query_id), {"name": name, "sql": sql, "description": description})
+
+    def delete_query(self, query_id: str) -> Any:
+        return self.delete(seg("database", "queries", query_id))
+
     def query(self, sql: str, params: Sequence[Any] | None = None, *, allow_write: bool = False) -> Any:
         """Run one statement. A write needs ``allow_write=True``; it is audited and clears the environment's caches."""
         return self.post("/database/query", {"sql": sql, "params": list(params or []), "allow_write": allow_write})
-
-
-class Runtime(Service):
-    """The runtime capabilities a function sees, called remotely (what ``pawabase emulate`` uses)."""
-
-    def call(self, method: str, args: Sequence[Any] = (), kwargs: Mapping[str, Any] | None = None, *, as_user: Mapping[str, Any] | None = None, branch: str | None = None) -> Any:
-        return self.post("/runtime/call", {"method": method, "args": list(args), "kwargs": dict(kwargs or {}), "as_user": dict(as_user) if as_user else None, "branch": branch})
-
-    def sql(self, op: str, **fields: Any) -> Any:
-        """``fetch``, ``insert``, ``execute``, ``begin``, ``commit``…, optionally inside a transaction (``tx``)."""
-        return self.post("/runtime/db", {"op": op, **fields})
-
-    def identify(self, token: str | None) -> Any:
-        """Who a user access token belongs to."""
-        return self.post("/runtime/identify", {"token": token})

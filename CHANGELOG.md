@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0
+
+- **Agents and knowledge:** `pb.ai.agents` (`list`, `run`, `stream`, `get`, `decide`, `wait`) and `pb.ai.knowledge` (`search`, `add_document`,
+  `add_file`, `document`) run the server's agents and search its knowledge bases. `stream` and `wait` work on the async client too.
+- **Management:** `pb.manage.agents`, `agent_runs` (list, decide, tools), `knowledge_bases` (documents, reindex, search, Notion sync) and
+  `connections` (with `test`).
+- **Versions:** `pb.manage.versions` (`list`, `check`, `release`, `retire`) replaces `pb.manage.releases`; `environments.promote(dry_run=True)`.
+- **Also:** bucket folders (`buckets.create_folder` / `delete_folder`), saved SQL queries (`database.saved_queries`…), the mail brand kit
+  (`mail.kit` / `save_kit`) and `mail_templates.rename`, and `observability.bandwidth`.
+- **Fixed:** `cache.stats()`, `observability.workers()` and `capacity()` call the project-wide routes they belong to.
+- **Removed what the server no longer has:** `pb.manage.firewall`, `transformers`, `runtime`, `releases` (branches, revisions, releases,
+  deployments), and the `branch=` argument on definitions.
+
 ## 0.3.1
 
 - **Profile pictures:** `pb.auth.set_avatar(image)` and `pb.auth.remove_avatar()`. The server stores the picture in a public bucket and sets `avatar_url`.

@@ -48,23 +48,22 @@ def seg(*parts: Any) -> str:
 class Definitions(Service):
     """A kind of definition an environment holds (``flows``, ``policies``, ``webhooks``…): list, get, create, replace, delete.
 
-    ``branch`` works on a feature branch's draft instead of the live environment (see ``pb.manage.releases``). A definition is addressed by its
-    name (inbound hooks: their slug; routes: their id).
+    A definition is addressed by its name (inbound hooks: their slug; routes: their id).
     """
 
     kind = ""
 
-    def list(self, *, branch: str | None = None) -> Any:
-        return self.get(seg(self.kind), branch=branch)
+    def list(self) -> Any:
+        return self.get(seg(self.kind))
 
-    def get_one(self, key: str, *, branch: str | None = None) -> Any:
-        return self.get(seg(self.kind, key), branch=branch)
+    def get_one(self, key: str) -> Any:
+        return self.get(seg(self.kind, key))
 
-    def create(self, body: Mapping[str, Any], *, branch: str | None = None) -> Any:
-        return self.post(seg(self.kind), dict(body), branch=branch)
+    def create(self, body: Mapping[str, Any]) -> Any:
+        return self.post(seg(self.kind), dict(body))
 
-    def replace(self, key: str, body: Mapping[str, Any], *, branch: str | None = None) -> Any:
-        return self.put(seg(self.kind, key), dict(body), branch=branch)
+    def replace(self, key: str, body: Mapping[str, Any]) -> Any:
+        return self.put(seg(self.kind, key), dict(body))
 
-    def remove(self, key: str, *, branch: str | None = None) -> Any:
-        return self.delete(seg(self.kind, key), branch=branch)
+    def remove(self, key: str) -> Any:
+        return self.delete(seg(self.kind, key))

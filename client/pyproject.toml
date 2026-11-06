@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "pawabase"
 dynamic = ["version"]
-description = "Python client for Pawabase: records, auth, storage, functions, flows, realtime, user administration and environment management."
+description = "Python client for Pawabase: records, auth, storage, flows, agents, realtime, user administration and environment management."
 readme = "README.md"
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]

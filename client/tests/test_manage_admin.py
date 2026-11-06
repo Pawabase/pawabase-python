@@ -22,9 +22,9 @@ def test_every_service_is_bound_to_the_clients_environment(wire, sk):
     assert sk.manage.environment("staging").flows.env == "staging"
 
 
-def test_definitions_use_names_and_branches(wire, sk):
-    sk.manage.flows.list(branch="feat")
-    assert wire.last.url.path == f"{BASE}/flows" and wire.query() == {"branch": "feat"}
+def test_definitions_use_names(wire, sk):
+    sk.manage.flows.list()
+    assert wire.last.url.path == f"{BASE}/flows" and wire.query() == {}
     sk.manage.flows.replace("a b", {"name": "a b"})
     assert wire.last.method == "PUT" and wire.last.url.raw_path == f"{BASE}/flows/a%20b".encode()
     sk.manage.environment("staging").policies.remove("p")
@@ -42,20 +42,6 @@ def test_keys_and_secrets(wire, sk):
     assert wire.last.method == "PUT" and wire.json() == {"value": "v", "description": "", "rotate_every_days": 30}
     sk.manage.secrets.rollback("STRIPE_KEY")
     assert wire.last.url.path == f"{BASE}/secrets/STRIPE_KEY/rollback"
-
-
-def test_firewall_rules_bans_and_the_dry_run(wire, sk):
-    sk.manage.firewall.add_rule(name="Burst", action="rate_limit", conditions=[{"field": "path", "op": "starts_with", "value": "/auth"}], rate_limit={"requests": 5, "window_seconds": 60})
-    body = wire.json()
-    assert wire.last.url.path == f"{BASE}/firewall" and body["action"] == "rate_limit" and body["rate_limit"]["requests"] == 5 and body["logic"] == "all"
-    sk.manage.firewall.order(["a", "b"])
-    assert wire.last.method == "PUT" and wire.json() == {"ids": ["a", "b"]}
-    sk.manage.firewall.ban("1.2.3.4", seconds=60)
-    assert wire.json() == {"ip": "1.2.3.4", "seconds": 60, "reason": ""}
-    sk.manage.firewall.test("1.2.3.4", path="/x")
-    assert wire.last.url.path == f"{BASE}/firewall-test" and wire.json()["path"] == "/x"
-    sk.manage.firewall.bans(include_expired=True)
-    assert wire.query() == {"all": "1"}
 
 
 def test_jobs_cache_and_schedules_send_what_the_server_reads(wire, sk):
@@ -84,11 +70,13 @@ def test_lifecycle_calls_are_project_wide_or_environment_scoped(wire, sk):
     sk.manage.environments.update("staging", settings={"a": 1})
     assert wire.last.method == "PATCH" and wire.last.url.path == "/platform/v1/envs/staging" and wire.json() == {"settings": {"a": 1}}
     sk.manage.environments.promote("staging", include=["flows"])
-    assert wire.last.url.path == f"{BASE}/promote" and wire.json() == {"to": "staging", "include": ["flows"]}
+    assert wire.last.url.path == f"{BASE}/promote" and wire.json() == {"to": "staging", "include": ["flows"], "dry_run": False}
     sk.manage.backups.restore_snapshot("s1", strategy="replace", confirm="production")
     assert wire.last.url.path == f"{BASE}/snapshots/s1/restore" and wire.json()["confirm"] == "production" and wire.json()["safety_snapshot"] is True
-    sk.manage.releases.merge("feat")
-    assert wire.json() == {"target": "main", "force": False}
+    sk.manage.versions.release("v2", "staging", notes="n")
+    assert wire.last.url.path == f"{BASE}/versions" and wire.json() == {"name": "v2", "from_env": "staging", "notes": "n"}
+    sk.manage.versions.retire("v2")
+    assert wire.last.url.path == f"{BASE}/versions/v2/retire"
 
 
 def test_user_administration_is_environment_scoped(wire, sk):

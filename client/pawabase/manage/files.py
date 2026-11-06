@@ -5,9 +5,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from typing import Any
 
+from .. import _core
 from ._base import Definitions, Service, seg
 
 
@@ -51,12 +51,22 @@ class Buckets(Definitions):
     def revoke_share(self, bucket: str, share_id: str) -> Any:
         return self.delete(seg(self.kind, bucket, "shares", share_id))
 
+    # folders
+    def create_folder(self, bucket: str, prefix: str) -> Any:
+        """Make an empty folder (*prefix* like ``reports/2026``)."""
+        return self.post(seg(self.kind, bucket, "folders"), {"prefix": prefix})
+
+    def delete_folder(self, bucket: str, prefix: str) -> Any:
+        """Remove a folder; it must be empty."""
+        return self.delete(f"{seg(self.kind, bucket, 'folders')}/{_core.key_path(prefix.strip('/'))}")
+
 
 class Cache(Service):
     """The environment's response cache."""
 
     def stats(self) -> Any:
-        return self.get("/cache")
+        """The project's cache statistics (not scoped to one environment)."""
+        return self._c._call("GET", "/platform/v1/cache", retry=True)
 
     def invalidate(self, *, tags: list[str] | None = None, resources: list[str] | None = None) -> Any:
         """Drop cached responses by tag (``resource:posts``) or for whole resources."""

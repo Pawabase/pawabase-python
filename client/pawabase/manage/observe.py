@@ -65,14 +65,20 @@ class Observability(Service):
         return self.get("/metric-series", metric=metric, minutes=minutes, period=period, compare="previous" if compare_previous else None)
 
     def workers(self) -> Any:
-        return self.get("/workers")
+        """The project's background workers (not scoped to one environment)."""
+        return self._c._call("GET", "/platform/v1/workers", retry=True)
 
     def configuration(self) -> Any:
         """What the environment is running with."""
         return self.get("/configuration")
 
     def capacity(self) -> Any:
-        return self.get("/capacity")
+        """What the project has used against what its plan allows (not scoped to one environment)."""
+        return self._c._call("GET", "/platform/v1/capacity", retry=True)
+
+    def bandwidth(self, *, minutes: int | None = None) -> Any:
+        """Bytes received and sent over the last *minutes*, and the endpoints, callers and requests that moved the most."""
+        return self.get("/observability/bandwidth", minutes=minutes)
 
 
 class Alarms(Service):

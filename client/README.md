@@ -125,7 +125,7 @@ admin.admin.users.erase_data(user_id, confirm="ada@example.com") # final: delete
 admin.admin.privacy.requests()                                   # the exports and erasures handled so far
 
 admin.manage.secrets.set("STRIPE_KEY", "sk_live_…")
-admin.manage.firewall.ban("203.0.113.7", seconds=3600)
+admin.manage.agents.run("support", "How do I reset a password?")
 admin.manage.jobs.replay(job="send_mail", since_minutes=60, dry_run=True)
 admin.manage.observability.logs(q="timeout", minutes=15)
 admin.manage.backups.snapshot("before-launch")
@@ -133,18 +133,19 @@ admin.manage.environment("staging").flows.list()      # the same API for another
 ```
 
 `pb.admin` administers the people who sign in to your application: `users`, `roles`, `orgs`, `invitations`, `sessions`, `api_keys`, `machines`, `devices`, `insight`
-(events, statistics, identity backup, hosted pages). `pb.manage` is the environment's management plane, in four families:
+(events, statistics, identity backup, hosted pages). `pb.manage` is the environment's management plane, in these families:
 
 | Family | Services |
 | --- | --- |
-| Data | `resources`, `schema`, `policies`, `schemas`, `transformers`, `routes`, `database`, `runtime` |
+| Data | `resources`, `schema`, `policies`, `schemas`, `routes`, `database` |
+| Agents | `agents`, `agent_runs`, `knowledge_bases`, `connections` |
 | Automation | `flows`, `schedules`, `subscriptions`, `events`, `webhooks`, `inbound_hooks`, `jobs` |
 | Files and mail | `buckets`, `cache`, `mail`, `mail_templates` |
-| Access | `keys`, `secrets`, `domains`, `firewall` |
+| Access | `keys`, `secrets`, `domains` |
 | Observe | `observability`, `alarms`, `status_page`, `health` (service health, plan usage, audit) |
-| Lifecycle | `environments` (previews, promote, blueprints), `releases` (branches, revisions, API versions), `backups` (backups, snapshots, restore) |
+| Lifecycle | `environments` (previews, promote, blueprints), `versions` (side-by-side API versions), `backups` (backups, snapshots, restore) |
 
-Definitions (`flows`, `policies`, `webhooks`…) share `list`, `get_one`, `create`, `replace` and `remove`, and take `branch=` to work on a feature branch.
+Definitions (`flows`, `policies`, `webhooks`…) share `list`, `get_one`, `create`, `replace` and `remove`.
 Both are scoped to the client's environment; a key manages only its own.
 
 ## Errors and retries

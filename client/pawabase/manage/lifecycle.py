@@ -1,9 +1,8 @@
-"""Lifecycle: environments, previews, promotion, blueprints, branches and releases, backups and snapshots."""
+"""Lifecycle: environments, previews, promotion, blueprints, API versions, backups and snapshots."""
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from datetime import datetime
 from typing import Any
 
 from ._base import Service, seg
@@ -48,9 +47,9 @@ class Environments(Service):
     def delete_preview(self, preview: str) -> Any:
         return self.delete(seg("previews", preview))
 
-    def promote(self, to: str, *, include: Sequence[str] | None = None) -> Any:
-        """Copy this environment's definitions (never secrets or keys) to *to*. ``include`` limits the kinds (``flows``, ``policies``, ``resources``…)."""
-        return self.post("/promote", {"to": to, **({"include": list(include)} if include is not None else {})})
+    def promote(self, to: str, *, include: Sequence[str] | None = None, dry_run: bool = False) -> Any:
+        """Copy this environment's definitions (never secrets or keys) to *to*. ``include`` limits the kinds; ``dry_run`` only reports what would change."""
+        return self.post("/promote", {"to": to, "dry_run": dry_run, **({"include": list(include)} if include is not None else {})})
 
     def blueprint(self) -> Any:
         """Export definitions, roles and settings as a document another project can apply."""
@@ -65,62 +64,25 @@ class Environments(Service):
         return self._c._call("POST", "/platform/v1/code/reload")
 
 
-class Releases(Service):
-    """Feature branches of the definitions, immutable revisions, API versions and releases."""
+class Versions(Service):
+    """API versions served side by side. ``v1`` is always the live API; another environment's definitions released as ``v2`` are served at
+    ``/rest/v2`` over this environment's tables, until you retire them."""
 
-    # branches
-    def branches(self) -> Any:
-        return self.get("/branches")
+    def list(self) -> Any:
+        """The live API first, then every released version."""
+        return self.get("/versions")
 
-    def create_branch(self, name: str, *, from_branch: str | None = None, from_revision: str | None = None, protected: bool = False) -> Any:
-        return self.post("/branches", {k: v for k, v in {"name": name, "from_branch": from_branch, "from_revision": from_revision, "protected": protected}.items() if v is not None})
+    def check(self, from_env: str) -> Any:
+        """Whether *from_env*'s definitions can be served here as a version, and what would be added or left out."""
+        return self.post("/versions/check", {"from_env": from_env})
 
-    def draft(self, branch: str) -> Any:
-        """The branch's definitions as they stand now."""
-        return self.get(seg("branches", branch, "draft"))
+    def release(self, name: str, from_env: str, *, notes: str = "") -> Any:
+        """Serve *from_env*'s definitions as ``/rest/<name>`` (``v2``, ``v3``…). A name is never reused."""
+        return self.post("/versions", {"name": name, "from_env": from_env, "notes": notes})
 
-    def merge(self, branch: str, *, target: str = "main", force: bool = False) -> Any:
-        return self.post(seg("branches", branch, "merge"), {"target": target, "force": force})
-
-    # revisions
-    def revisions(self) -> Any:
-        return self.get("/revisions")
-
-    def revision(self, revision_id: str) -> Any:
-        return self.get(seg("revisions", revision_id))
-
-    def commit(self, branch: str, message: str = "") -> Any:
-        """Freeze the branch's draft as a revision."""
-        return self.post(seg("branches", branch, "revisions"), {"message": message})
-
-    # api versions
-    def api_versions(self) -> Any:
-        return self.get("/api-versions")
-
-    def create_api_version(self, name: str, *, is_default: bool = False) -> Any:
-        return self.post("/api-versions", {"name": name, "is_default": is_default})
-
-    def update_api_version(self, name: str, *, status: str | None = None, is_default: bool | None = None, sunset_at: datetime | str | None = None) -> Any:
-        """``status``: draft, active, deprecated, sunset, disabled."""
-        when = sunset_at.isoformat() if isinstance(sunset_at, datetime) else sunset_at
-        return self.patch(seg("api-versions", name), {k: v for k, v in {"status": status, "is_default": is_default, "sunset_at": when}.items() if v is not None})
-
-    def rollback_api_version(self, name: str) -> Any:
-        return self.post(seg("api-versions", name, "rollback"))
-
-    # releases
-    def releases(self) -> Any:
-        return self.get("/releases")
-
-    def release(self, revision_id: str, api_version: str, name: str, *, notes: str = "", allow_breaking: bool = False) -> Any:
-        """Make a revision the live definitions of an API version."""
-        return self.post("/releases", {"revision_id": revision_id, "api_version": api_version, "name": name, "notes": notes, "allow_breaking": allow_breaking})
-
-    def activate(self, release_id: str) -> Any:
-        return self.post(seg("releases", release_id, "activate"))
-
-    def deployments(self) -> Any:
-        return self.get("/deployments")
+    def retire(self, name: str) -> Any:
+        """Stop serving a version."""
+        return self.post(seg("versions", name, "retire"))
 
 
 class Backups(Service):

@@ -2,7 +2,7 @@
 
     pb = Pawabase(url, "pb_sk_…", environment="production")
     pb.manage.secrets.set("STRIPE_KEY", "sk_live_…")
-    pb.manage.firewall.ban("203.0.113.9", seconds=3600)
+    pb.manage.agents.run("support", "How do I reset a password?")
     pb.manage.environment("staging").flows.list()       # the same API for another environment the key may manage
 """
 
@@ -10,12 +10,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from .access import Domains, Firewall, Keys, Secrets
+from .access import Domains, Keys, Secrets
+from .agents import AgentRuns, Agents, Connections, KnowledgeBases
 from .ai import Ai
 from .automation import Events, Flows, InboundHooks, Jobs, Schedules, Subscriptions, Webhooks
-from .data import Database, Policies, Resources, Routes, Runtime, Schema, Schemas, Transformers
+from .data import Database, Policies, Resources, Routes, Schema, Schemas
 from .files import Buckets, Cache
-from .lifecycle import Backups, Environments, Releases
+from .lifecycle import Backups, Environments, Versions
 from .mail import Mail, MailTemplates
 from .observe import Alarms, Health, Observability, StatusPage
 from .realtime import Dashboards, RealtimeChannels
@@ -24,8 +25,8 @@ __all__ = ["Manage"]
 
 SERVICES: dict[str, type] = {
     # data
-    "resources": Resources, "schema": Schema, "policies": Policies, "schemas": Schemas, "transformers": Transformers, "routes": Routes,
-    "database": Database, "runtime": Runtime,
+    "resources": Resources, "schema": Schema, "policies": Policies, "schemas": Schemas, "routes": Routes,
+    "database": Database,
     # automation
     "flows": Flows, "schedules": Schedules, "subscriptions": Subscriptions, "events": Events, "webhooks": Webhooks,
     "inbound_hooks": InboundHooks, "jobs": Jobs,
@@ -34,13 +35,13 @@ SERVICES: dict[str, type] = {
     # realtime and dashboards
     "realtime_channels": RealtimeChannels, "dashboards": Dashboards,
     # access
-    "keys": Keys, "secrets": Secrets, "domains": Domains, "firewall": Firewall,
+    "keys": Keys, "secrets": Secrets, "domains": Domains,
     # observe
     "observability": Observability, "alarms": Alarms, "status_page": StatusPage, "health": Health,
     # ai
-    "ai": Ai,
+    "ai": Ai, "agents": Agents, "agent_runs": AgentRuns, "knowledge_bases": KnowledgeBases, "connections": Connections,
     # lifecycle
-    "environments": Environments, "releases": Releases, "backups": Backups,
+    "environments": Environments, "versions": Versions, "backups": Backups,
 }
 
 
@@ -51,10 +52,8 @@ class Manage:
     schema: Schema
     policies: Policies
     schemas: Schemas
-    transformers: Transformers
     routes: Routes
     database: Database
-    runtime: Runtime
     flows: Flows
     schedules: Schedules
     subscriptions: Subscriptions
@@ -71,14 +70,17 @@ class Manage:
     keys: Keys
     secrets: Secrets
     domains: Domains
-    firewall: Firewall
     observability: Observability
     alarms: Alarms
     status_page: StatusPage
     health: Health
     ai: Ai
+    agents: Agents
+    agent_runs: AgentRuns
+    knowledge_bases: KnowledgeBases
+    connections: Connections
     environments: Environments
-    releases: Releases
+    versions: Versions
     backups: Backups
 
     def __init__(self, client: Any, environment: str | None = None) -> None:
