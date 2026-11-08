@@ -10,6 +10,9 @@ Publishing, presence and history work over plain HTTP on either client. A live s
         await room.send("message", {"text": "hello"})
         async for message in pb.realtime.channel("resource:posts"):      # a resource with realtime on: its changes, as you may read them
             print(message["event"], message["payload"]["record"])
+        async with pb.realtime.live("tasks", filter={"done": "eq.false"}, sort="-created_at") as tasks:
+            async for result in tasks:                                     # a live query: the whole result, again whenever it changes
+                print(result["data"])
 
 Messages on ``resource:<name>`` channels are checked per subscriber against the resource's read policy, so you only hear about records you may read.
 """
@@ -95,6 +98,8 @@ class Realtime:
         self._beat: asyncio.Task[None] | None = None
         self._pending: dict[str, asyncio.Future[dict[str, Any]]] = {}
         self._channels: dict[str, Channel] = {}
+        self._queries: dict[str, LiveQuery] = {}
+        self._query_ids = 0
         self._refs = 0
         self._connecting: asyncio.Lock | None = None
         self._manual = False
@@ -151,6 +156,30 @@ class Realtime:
         channel.replay = replay or channel.replay
         return channel
 
+    def live(
+        self,
+        resource: str,
+        *,
+        filter: dict[str, Any] | None = None,
+        sort: str | None = None,
+        select: str | None = None,
+        q: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> LiveQuery:
+        """A live query: the result of ``GET /rest/v1/<resource>`` with these options, sent again whenever it changes.
+
+        The same filters, sort, search and list policy apply, so you only get rows you could read. The table needs *Broadcast changes* on.
+        ``await live.start()`` (or ``async with``) opens it and returns the first result; iterate it, or use ``on_change``, for the next ones.
+        It reopens by itself after a reconnect.
+        """
+        _core.require_async(self._c, "A live query")
+        self._query_ids += 1
+        query = _core.compact({"filter": filter, "sort": sort, "select": select, "q": q, "limit": limit, "offset": offset})
+        live = LiveQuery(self, f"lq{self._query_ids}", resource, query)
+        self._queries[live.id] = live
+        return live
+
     def _url(self) -> str:
         parts = urlsplit(self._c.url)
         scheme = "wss" if parts.scheme == "https" else "ws"
@@ -194,6 +223,8 @@ class Realtime:
         self._fail_pending(RealtimeError("closed", "The realtime connection was closed."))
         for channel in self._channels.values():
             channel._end("disconnected")
+        for live in self._queries.values():
+            live._end()
         if socket is not None:
             with contextlib.suppress(Exception):
                 await socket.close()
@@ -224,6 +255,8 @@ class Realtime:
         if self._manual or code in FATAL_CLOSE:
             for channel in self._channels.values():
                 channel._end(f"closed ({code})")
+            for live in self._queries.values():
+                live._end()
             return
         asyncio.create_task(self._reconnect())
 
@@ -235,6 +268,12 @@ class Realtime:
                 for channel in list(self._channels.values()):
                     if channel._wanted:
                         await channel._join(rejoining=True)
+                for live in list(self._queries.values()):
+                    if live.open:
+                        try:
+                            await live._ask()
+                        except RealtimeError as error:
+                            live._fail(error)
                 return
             except Exception:  # noqa: BLE001 - keep trying with a growing pause
                 await asyncio.sleep(delay)
@@ -262,6 +301,14 @@ class Realtime:
             channel = self._channels.get(str(frame.get("channel")))
             if channel:
                 channel._presence_diff(frame.get("joins") or [], frame.get("leaves") or [])
+        elif kind == "query_result":
+            live = self._queries.get(str(frame.get("id")))
+            if live:
+                live._deliver(frame)
+        elif kind == "query_closed":
+            live = self._queries.get(str(frame.get("id")))
+            if live:
+                live._fail(RealtimeError("query_closed", str(frame.get("reason") or "The live query was closed.")))
 
     def _fail_pending(self, error: Exception) -> None:
         for future in self._pending.values():
@@ -389,3 +436,95 @@ class Channel:
         if message is None:
             raise StopAsyncIteration
         return message
+
+
+class LiveQuery:
+    """An open live query: ``data`` and ``total`` are the latest result; iterate it (``async for result in live``) or use ``on_change``."""
+
+    def __init__(self, realtime: Realtime, ident: str, resource: str, query: dict[str, Any]) -> None:
+        self._rt = realtime
+        self.id = ident
+        self.resource = resource
+        self.query = query
+        self.data: list[dict[str, Any]] = []
+        self.total: int | None = None
+        self.open = False
+        self.error: RealtimeError | None = None
+        self._handlers: list[Handler] = []
+        self._queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+        self._first: asyncio.Future[dict[str, Any]] | None = None
+        self._iterated = False
+
+    def on_change(self, handler: Handler) -> LiveQuery:
+        """Call ``handler({"data": [...], "total": n})`` with every new result. Chainable."""
+        self._handlers.append(handler)
+        return self
+
+    async def start(self) -> dict[str, Any]:
+        """Open the query and return its first result. Raises :class:`~pawabase.errors.RealtimeError` when it is refused."""
+        if self._first is None:
+            self._first = asyncio.get_running_loop().create_future()
+            self.open = True
+            try:
+                await self._ask()
+            except RealtimeError as error:
+                self._fail(error)
+        return await self._first
+
+    async def _ask(self) -> None:
+        await self._rt.request({"type": "query", "id": self.id, "resource": self.resource, "query": self.query})
+
+    async def stop(self) -> None:
+        """End the live query."""
+        if self.open:
+            self.open = False
+            with contextlib.suppress(Exception):
+                await self._rt.request({"type": "unquery", "id": self.id})
+        self._rt._queries.pop(self.id, None)
+        self._end()
+
+    def _deliver(self, frame: dict[str, Any]) -> None:
+        if not self.open:
+            return
+        result = {"data": list(frame.get("data") or []), "total": frame.get("total")}
+        self.data, self.total = result["data"], result["total"]
+        if self._first is not None and not self._first.done():
+            self._first.set_result(result)
+        else:
+            self._queue.put_nowait(result)  # the first result is start()'s answer; iteration yields the ones after it
+        for handler in self._handlers:
+            outcome = handler(result)
+            if inspect.isawaitable(outcome):
+                asyncio.ensure_future(outcome)
+
+    def _fail(self, error: RealtimeError) -> None:
+        self.error = error
+        self.open = False
+        self._rt._queries.pop(self.id, None)
+        if self._first is not None and not self._first.done():
+            self._first.set_exception(error)
+        self._end()
+
+    def _end(self) -> None:
+        self._queue.put_nowait(None)
+
+    async def __aenter__(self) -> LiveQuery:
+        await self.start()
+        return self
+
+    async def __aexit__(self, *exc: Any) -> None:
+        await self.stop()
+
+    def __aiter__(self) -> LiveQuery:
+        return self
+
+    async def __anext__(self) -> dict[str, Any]:
+        if not self._iterated:
+            self._iterated = True  # iteration starts with the first result, whether or not start() already fetched it
+            return await self.start()
+        result = await self._queue.get()
+        if result is None:
+            if self.error is not None:
+                raise self.error
+            raise StopAsyncIteration
+        return result

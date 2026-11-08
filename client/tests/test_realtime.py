@@ -17,6 +17,11 @@ class Server:
     def __init__(self) -> None:
         self.frames: list[dict] = []
         self.urls: list[str] = []
+        self.sockets: list = []
+
+    async def push(self, frame: dict) -> None:
+        for socket in self.sockets:
+            await socket.send(json.dumps(frame))
 
     async def handle(self, socket):
         self.urls.append(socket.request.path)
@@ -32,6 +37,15 @@ class Server:
             elif kind == "publish":
                 await socket.send(json.dumps({"type": "ack", "ref": ref, "ok": True, "id": "m1"}))
                 await socket.send(json.dumps({"type": "message", "id": "m1", "channel": frame["channel"], "event": frame["event"], "payload": frame["payload"]}))
+            elif kind == "query":
+                if frame["resource"] == "secret":
+                    await socket.send(json.dumps({"type": "ack", "ref": ref, "ok": False, "error": "forbidden", "reason": "policy 'owner' refused"}))
+                    continue
+                self.sockets.append(socket)
+                await socket.send(json.dumps({"type": "ack", "ref": ref, "ok": True, "id": frame["id"]}))
+                await socket.send(json.dumps({"type": "query_result", "id": frame["id"], "data": [{"id": 1, "title": "first"}], "total": 1}))
+            elif kind == "unquery":
+                await socket.send(json.dumps({"type": "ack", "ref": ref, "ok": True, "id": frame["id"]}))
             elif kind in ("subscribe", "unsubscribe", "presence"):
                 await socket.send(json.dumps({"type": "ack", "ref": ref, "ok": True}))
                 if kind == "subscribe":
@@ -83,6 +97,37 @@ async def test_iterating_a_channel_yields_its_messages_and_ends_on_close(gateway
     await pb.close()
     with pytest.raises(StopAsyncIteration):
         await asyncio.wait_for(room.__anext__(), 2)
+
+
+async def test_a_live_query_gives_its_result_then_every_change(gateway):
+    server, url = gateway
+    async with AsyncPawabase(url, "pb_pk_test") as pb:
+        seen = []
+        tasks = pb.realtime.live("tasks", filter={"done": "eq.false"}, sort="-id", limit=10).on_change(lambda r: seen.append([t["title"] for t in r["data"]]))
+        first = await tasks.start()
+        assert first == {"data": [{"id": 1, "title": "first"}], "total": 1}
+        assert server.frames[-1] == {"type": "query", "id": tasks.id, "resource": "tasks", "query": {"filter": {"done": "eq.false"}, "sort": "-id", "limit": 10}, "ref": "1"}
+        await server.push({"type": "query_result", "id": tasks.id, "data": [{"id": 2, "title": "second"}, {"id": 1, "title": "first"}], "total": 2})
+        results = aiter(tasks)
+        assert (await asyncio.wait_for(anext(results), 2))["total"] == 1  # iteration starts with the first result
+        assert [t["title"] for t in (await asyncio.wait_for(anext(results), 2))["data"]] == ["second", "first"]
+        assert tasks.total == 2 and seen == [["first"], ["second", "first"]]
+        await tasks.stop()
+        assert server.frames[-1]["type"] == "unquery"
+
+
+async def test_a_refused_or_closed_live_query_raises(gateway):
+    server, url = gateway
+    async with AsyncPawabase(url, "pb_pk_test") as pb:
+        with pytest.raises(RealtimeError) as raised:
+            await pb.realtime.live("secret").start()
+        assert raised.value.code == "forbidden"
+        async with pb.realtime.live("tasks") as tasks:
+            await server.push({"type": "query_closed", "id": tasks.id, "reason": "access lost"})
+            results = aiter(tasks)
+            await anext(results)
+            with pytest.raises(RealtimeError, match="access lost"):
+                await asyncio.wait_for(anext(results), 2)
 
 
 SSE_BODY = (
