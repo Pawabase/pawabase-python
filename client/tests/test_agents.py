@@ -18,7 +18,7 @@ def sse(*events):
 def test_agents_list_run_get_and_decide(wire, pb):
     wire.answer(httpx.Response(200, json={"data": [{"name": "support", "description": ""}]}))
     assert pb.ai.agents.list()[0]["name"] == "support"
-    wire.answer(httpx.Response(201, json={"id": "r1", "status": "finished", "output": "done"}))
+    wire.answer(httpx.Response(201, json={"id": "r1", "status": "done", "output": "done"}))
     assert pb.ai.agents.run("support", "hi", thread="t1")["output"] == "done"
     assert wire.last.url.path == "/ai/v1/agents/support/runs" and wire.json() == {"input": "hi", "background": False, "thread": "t1"}
     pb.ai.agents.decide("r1", decisions={"c1": True})
@@ -28,8 +28,8 @@ def test_agents_list_run_get_and_decide(wire, pb):
 
 
 def test_an_agent_stream_yields_events_until_done_and_raises_on_an_error_event(wire, pb):
-    wire.answer(sse('{"type":"text","text":"Hi"}', '{"type":"finished"}', "[DONE]"))
-    assert [e["type"] for e in pb.ai.agents.stream("support", "hi")] == ["text", "finished"]
+    wire.answer(sse('{"type":"text","text":"Hi"}', '{"type":"done","run":{"id":"r1"}}', "[DONE]"))
+    assert [e["type"] for e in pb.ai.agents.stream("support", "hi")] == ["text", "done"]
     assert wire.json()["stream"] is True
     wire.answer(sse('{"type":"error","message":"nope"}'))
     with pytest.raises(PawabaseError) as caught:
@@ -38,9 +38,9 @@ def test_an_agent_stream_yields_events_until_done_and_raises_on_an_error_event(w
 
 
 def test_wait_polls_until_the_run_stops_running(wire, pb):
-    statuses = iter(["running", "running", "finished"])
+    statuses = iter(["running", "running", "done"])
     wire.answer(lambda request: httpx.Response(200, json={"id": "r1", "status": next(statuses)}))
-    assert pb.ai.agents.wait("r1", interval=0)["status"] == "finished"
+    assert pb.ai.agents.wait("r1", interval=0)["status"] == "done"
     assert len(wire.requests) == 3
 
 
@@ -60,9 +60,9 @@ async def test_the_async_client_streams_and_waits(wire):
     pb = make_async(wire)
     wire.answer(sse('{"type":"text","text":"Hi"}', "[DONE]"))
     assert [e["type"] async for e in pb.ai.agents.stream("support", "hi")] == ["text"]
-    statuses = iter(["running", "finished"])
+    statuses = iter(["running", "done"])
     wire.answer(lambda request: httpx.Response(200, json={"id": "r1", "status": next(statuses)}))
-    assert (await pb.ai.agents.wait("r1", interval=0))["status"] == "finished"
+    assert (await pb.ai.agents.wait("r1", interval=0))["status"] == "done"
     await pb.close()
 
 

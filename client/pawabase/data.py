@@ -490,7 +490,7 @@ class _ResourceBase:
         return self._client._call("PATCH", self._path(record_id), json=_json(values))
 
     def replace(self, record_id: Any, **values: Any) -> Any:
-        """Replace the record (PUT)."""
+        """Send the record with PUT. The server treats it like ``update``: fields you leave out are kept, not cleared."""
         return self._client._call("PUT", self._path(record_id), json=_json(values))
 
     def delete(self, record_id: Any) -> Any:

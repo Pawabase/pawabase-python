@@ -107,7 +107,7 @@ class Jobs(Service):
     """Background work: jobs, failures and replays, queues, workers and how failed work is retried."""
 
     def list(self, *, status: str | None = None, queue: str | None = None, limit: int | None = None) -> Any:
-        """``status``: ``queued``, ``active``, ``retrying``, ``succeeded``, ``failed``."""
+        """``status``: ``queued``, ``active``, ``retrying``, ``completed``, ``failed``."""
         return self.get("/jobs", status=status, queue=queue, limit=limit)
 
     def detail(self, job_id: str) -> Any:

@@ -60,12 +60,12 @@ def _seg(*parts: Any) -> str:
 
 
 def _event(line: str) -> dict[str, Any] | None:
-    """The event in one server-sent line: ``None`` for a line that carries none, ``{"type": "done"}`` at the end. Raises when the run reports an error."""
+    """The event in one server-sent line: ``None`` for a line that carries none, ``{"type": "__end__"}`` at the end. Raises when the run reports an error."""
     if not line.startswith("data:"):
         return None
     data = line[5:].strip()
     if data == "[DONE]":
-        return {"type": "done"}
+        return {"type": "__end__"}
     try:
         parsed = json.loads(data)
     except ValueError:
@@ -144,7 +144,7 @@ class Agents:
                 event = _event(line)
                 if event is None:
                     continue
-                if event.get("type") == "done":
+                if event.get("type") == "__end__":
                     return
                 yield event
 
@@ -157,7 +157,7 @@ class Agents:
                 event = _event(line)
                 if event is None:
                     continue
-                if event.get("type") == "done":
+                if event.get("type") == "__end__":
                     return
                 yield event
 

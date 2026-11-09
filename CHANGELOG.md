@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0
+
+- **Matches what the server returns.** An agent run's `status` is `done` (not `finished`) when it completes, and `stream` yields the server's own `done`
+  event (the end of the stream is marked internally, so the real event reaches you). Job `status` is `completed` (not `succeeded`).
+- **`replace` is documented as it behaves:** `PUT` is handled like `update` by the server, so fields you leave out are kept, not cleared.
+
+## 0.5.0
+
+- **Live queries:** `pb.realtime.live(resource, filter=..., sort=...)` keeps a query's whole result up to date over a WebSocket and gives it to you
+  again whenever it changes (async client; needs `pip install "pawabase[realtime]"`).
+
 ## 0.4.0
 
 - **Agents and knowledge:** `pb.ai.agents` (`list`, `run`, `stream`, `get`, `decide`, `wait`) and `pb.ai.knowledge` (`search`, `add_document`,
