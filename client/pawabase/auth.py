@@ -221,11 +221,11 @@ class Auth:
 
     def sign_up(
         self, *, email: str, password: str, username: str | None = None, name: str | None = None, data: Mapping[str, Any] | None = None,
-        redirect_to: str | None = None, accepted_terms: bool | None = None,
+        redirect_to: str | None = None, accepted_terms: bool | None = None, captcha_token: str | None = None,
     ) -> Any:
         """Create an account. A session when the environment signs people in at once, or ``verification_required`` when they must confirm their email first."""
         body = _core.compact(
-            {"email": email, "password": password, "username": username, "name": name, "data": dict(data) if data else None,
+            {"captcha_token": captcha_token, "email": email, "password": password, "username": username, "name": name, "data": dict(data) if data else None,
              "redirect_to": redirect_to, "accepted_terms": accepted_terms}
         )
 
@@ -238,8 +238,9 @@ class Auth:
 
         return _core.then(self._c._call("POST", "/auth/v1/signup", json=body, auth=False), done)
 
-    def sign_in_with_password(self, *, email: str, password: str, org: str | None = None, remember_device: bool = False) -> Any:
-        body = _core.compact({"grant_type": "password", "email": email, "password": password, "org": org, "remember_device": remember_device or None})
+    def sign_in_with_password(self, *, email: str, password: str, org: str | None = None, remember_device: bool = False, captcha_token: str | None = None) -> Any:
+        """``captcha_token``: a pass from :meth:`Captcha.protect`, when the environment protects sign-in (servers with a secret key are never asked)."""
+        body = _core.compact({"grant_type": "password", "email": email, "password": password, "org": org, "remember_device": remember_device or None, "captcha_token": captcha_token})
         return _core.then(self._c._call("POST", "/auth/v1/token", json=body, auth=False), lambda wire: self._signed_in(wire, org))
 
     def _signed_in(self, wire: Mapping[str, Any], org: str | None = None) -> SignInResult:
@@ -261,9 +262,9 @@ class Auth:
 
         return _core.then(self._c._call("POST", "/auth/v1/token", json=body, auth=False), done)
 
-    def sign_in_with_magic_link(self, *, email: str, redirect_to: str | None = None, create_user: bool | None = None) -> Any:
+    def sign_in_with_magic_link(self, *, email: str, redirect_to: str | None = None, create_user: bool | None = None, captcha_token: str | None = None) -> Any:
         """Email a one-time sign-in link."""
-        body = _core.compact({"email": email, "redirect_to": redirect_to, "create_user": create_user})
+        body = _core.compact({"email": email, "redirect_to": redirect_to, "create_user": create_user, "captcha_token": captcha_token})
         return self._c._call("POST", "/auth/v1/magic-link", json=body, auth=False)
 
     def verify_magic_link(self, token: str) -> Any:
@@ -350,8 +351,8 @@ class Auth:
 
         return _core.chain(self._c._call("DELETE", "/auth/v1/user/avatar"), after)
 
-    def resend_verification(self, *, email: str, redirect_to: str | None = None) -> Any:
-        return self._c._call("POST", "/auth/v1/verify/request", json=_core.compact({"email": email, "redirect_to": redirect_to}), auth=False)
+    def resend_verification(self, *, email: str, redirect_to: str | None = None, captcha_token: str | None = None) -> Any:
+        return self._c._call("POST", "/auth/v1/verify/request", json=_core.compact({"email": email, "redirect_to": redirect_to, "captcha_token": captcha_token}), auth=False)
 
     def verify_email(self, token: str) -> Any:
         """Confirm an email address from the link's token: signs the user in."""
@@ -365,8 +366,8 @@ class Auth:
     def confirm_email_change(self, token: str) -> Any:
         return self._c._call("POST", "/auth/v1/email/confirm", json={"token": token}, auth=False)
 
-    def request_password_reset(self, *, email: str, redirect_to: str | None = None) -> Any:
-        return self._c._call("POST", "/auth/v1/recover", json=_core.compact({"email": email, "redirect_to": redirect_to}), auth=False)
+    def request_password_reset(self, *, email: str, redirect_to: str | None = None, captcha_token: str | None = None) -> Any:
+        return self._c._call("POST", "/auth/v1/recover", json=_core.compact({"email": email, "redirect_to": redirect_to, "captcha_token": captcha_token}), auth=False)
 
     def reset_password(self, *, token: str, password: str) -> Any:
         """Set a new password from a reset link's token: signs the user in."""
@@ -393,7 +394,7 @@ class Auth:
 
     # ── guests, emailed codes, integration tokens ────────────────────────
 
-    def sign_in_anonymously(self) -> Any:
+    def sign_in_anonymously(self, *, captcha_token: str | None = None) -> Any:
         """Start a guest session: an account with no email or password, for someone who has not signed up yet. Turn it into a real one with
         :meth:`upgrade_anonymous`, keeping everything the guest created. The environment must allow guest sign-in."""
         def done(wire: Any) -> Session:
@@ -401,7 +402,7 @@ class Auth:
             self._keep(session, "SIGNED_IN")
             return session
 
-        return _core.then(self._c._call("POST", "/auth/v1/anonymous", json={}, auth=False), done)
+        return _core.then(self._c._call("POST", "/auth/v1/anonymous", json={}, auth=False, headers={"x-captcha-token": captcha_token} if captcha_token else None), done)
 
     def upgrade_anonymous(self, *, email: str, password: str | None = None, name: str | None = None, redirect_to: str | None = None) -> Any:
         """Turn the signed-in guest into a full account (a verification email is sent): ``{"user", "verification_sent"}``."""
@@ -417,9 +418,9 @@ class Auth:
 
         return _core.then(self._c._call("POST", "/auth/v1/anonymous/upgrade", json=body), done)
 
-    def send_email_code(self, *, email: str, create_user: bool = True) -> Any:
+    def send_email_code(self, *, email: str, create_user: bool = True, captcha_token: str | None = None) -> Any:
         """Email a short sign-in code (the answer is the same whether or not the address has an account)."""
-        return self._c._call("POST", "/auth/v1/email-code", json={"email": email, "create_user": create_user}, auth=False)
+        return self._c._call("POST", "/auth/v1/email-code", json=_core.compact({"email": email, "create_user": create_user, "captcha_token": captcha_token}), auth=False)
 
     def verify_email_code(self, *, email: str, code: str) -> Any:
         """Sign in with the code from :meth:`send_email_code`: a :class:`SignInResult` (``mfa_required`` when the account has a second factor)."""
@@ -633,11 +634,79 @@ class Orgs(_Part):
     def teams(self, slug: str) -> Any:
         return _core.then(self._c._call("GET", f"{self._base(slug)}/teams", retry=True), lambda body: body["data"])
 
-    def create_team(self, slug: str, *, team_slug: str, name: str) -> Any:
-        return self._c._call("POST", f"{self._base(slug)}/teams", json={"slug": team_slug, "name": name})
+    def create_team(self, slug: str, *, team_slug: str, name: str, description: str | None = None, role: str | None = None) -> Any:
+        return self._c._call("POST", f"{self._base(slug)}/teams", json=_core.compact({"slug": team_slug, "name": name, "description": description, "role": role}))
 
     def add_team_member(self, slug: str, team: str, user_id: str) -> Any:
         return self._c._call("PUT", f"{self._base(slug)}/teams/{_core.path_of(team)}/members/{_core.path_of(user_id)}")
 
     def remove_team_member(self, slug: str, team: str, user_id: str) -> Any:
         return self._c._call("DELETE", f"{self._base(slug)}/teams/{_core.path_of(team)}/members/{_core.path_of(user_id)}")
+
+    def update_team(self, slug: str, team: str, *, name: str | None = None, description: str | None = None, role: Any = _core.UNSET) -> Any:
+        """Rename a team, or change the role it gives its members (``role=None`` gives none)."""
+        body = _core.compact({"name": name, "description": description})
+        if role is not _core.UNSET:
+            body["role"] = role
+        return self._c._call("PATCH", f"{self._base(slug)}/teams/{_core.path_of(team)}", json=body)
+
+    def delete_team(self, slug: str, team: str) -> Any:
+        return self._c._call("DELETE", f"{self._base(slug)}/teams/{_core.path_of(team)}")
+
+    def team_members(self, slug: str, team: str) -> Any:
+        return _core.then(self._c._call("GET", f"{self._base(slug)}/teams/{_core.path_of(team)}/members", retry=True), lambda body: body["data"])
+
+    # ── roles and permissions ────────────────────────────────────────────
+
+    def roles(self, slug: str) -> Any:
+        """The roles members can have here: built in, the environment's, and the organization's own."""
+        return _core.then(self._c._call("GET", f"{self._base(slug)}/roles", retry=True), lambda body: body["data"])
+
+    def permissions(self, slug: str) -> Any:
+        """The permissions a role here can grant."""
+        return _core.then(self._c._call("GET", f"{self._base(slug)}/permissions", retry=True), lambda body: body["data"])
+
+    def save_role(self, slug: str, key: str, *, name: str, permissions: list[str], description: str = "") -> Any:
+        """Create or change one of this organization's own roles. It cannot grant more than the caller has."""
+        return self._c._call("PUT", f"{self._base(slug)}/roles/{_core.path_of(key)}", json={"name": name, "description": description, "permissions": list(permissions)})
+
+    def delete_role(self, slug: str, key: str) -> Any:
+        return self._c._call("DELETE", f"{self._base(slug)}/roles/{_core.path_of(key)}")
+
+    def transfer(self, slug: str, *, user_id: str, keep_role: str = "admin") -> Any:
+        """Make another member an owner. The caller keeps ``keep_role`` (``owner`` keeps them an owner too)."""
+        return self._c._call("POST", f"{self._base(slug)}/transfer", json={"user_id": user_id, "keep_role": keep_role})
+
+    # ── domains, security, activity ──────────────────────────────────────
+
+    def domains(self, slug: str) -> Any:
+        return _core.then(self._c._call("GET", f"{self._base(slug)}/domains", retry=True), lambda body: body["data"])
+
+    def add_domain(self, slug: str, *, domain: str, join: str = "off", role: str = "member") -> Any:
+        """Claim an email domain. Publish the answer's ``dns_record``, then :meth:`verify_domain`. ``join``: ``off``, ``suggest`` (people
+        with an address there see it under :meth:`joinable`) or ``join`` (they become members on their own)."""
+        return self._c._call("POST", f"{self._base(slug)}/domains", json={"domain": domain, "join": join, "role": role})
+
+    def verify_domain(self, slug: str, domain: str) -> Any:
+        return self._c._call("POST", f"{self._base(slug)}/domains/{_core.path_of(domain)}/verify")
+
+    def update_domain(self, slug: str, domain: str, *, join: str | None = None, role: str | None = None) -> Any:
+        return self._c._call("PATCH", f"{self._base(slug)}/domains/{_core.path_of(domain)}", json=_core.compact({"join": join, "role": role}))
+
+    def remove_domain(self, slug: str, domain: str) -> Any:
+        return self._c._call("DELETE", f"{self._base(slug)}/domains/{_core.path_of(domain)}")
+
+    def set_security(self, slug: str, *, require_mfa: bool) -> Any:
+        """Require members to use a second factor while working in this organization."""
+        return self._c._call("PATCH", f"{self._base(slug)}/security", json={"require_mfa": require_mfa})
+
+    def audit(self, slug: str, *, limit: int | None = None, before: Any = None) -> Any:
+        """What has changed, newest first: ``{"data": [...], "next": …}``. Pass ``next`` as ``before`` for older entries."""
+        return self._c._call("GET", f"{self._base(slug)}/audit", params=_core.compact({"limit": limit, "before": before}), retry=True)
+
+    def joinable(self) -> Any:
+        """Organizations the signed-in person may join because of their email address's domain."""
+        return _core.then(self._c._call("GET", "/auth/v1/joinable-orgs", retry=True), lambda body: body["data"])
+
+    def join(self, slug: str) -> Any:
+        return self._c._call("POST", f"/auth/v1/joinable-orgs/{_core.path_of(slug)}/join")

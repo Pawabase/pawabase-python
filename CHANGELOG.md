@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.0
+
+- **Bot protection:** `pb.captcha.verify(pass_, action=..., remoteip=...)` checks a pass your form received (server, secret key), with
+  Turnstile's answer shape plus `score` and `same_address`. `pb.captcha.protect(action)` earns a pass the way the widget does: the built-in
+  check is solved here, a hosted provider's widget is shown through `get_token=`. Protected auth calls (`sign_up`, `sign_in_with_password`,
+  `sign_in_with_magic_link`, `send_email_code`, `request_password_reset`, `resend_verification`, `sign_in_anonymously`) take `captcha_token=`.
+- **Organizations:** `pb.auth.orgs` gains `roles`, `permissions`, `save_role`, `delete_role`, `transfer`, `update_team`, `delete_team`,
+  `team_members`, `domains`, `add_domain`, `verify_domain`, `update_domain`, `remove_domain`, `set_security`, `audit`, `joinable` and `join`;
+  `create_team` takes `description` and `role`.
+- **Search:** `.search("red mug")` on a query (or a resource) runs full-text search over the table's search fields (`?q=`).
+
 ## 0.6.0
 
 - **Matches what the server returns.** An agent run's `status` is `done` (not `finished`) when it completes, and `stream` yields the server's own `done`

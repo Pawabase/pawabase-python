@@ -56,7 +56,9 @@ pb.auth.sign_out()                                           # scope="global" si
 The session is kept in memory (pass `session_store=FileSessionStore("~/.myapp/session.json")` to stay signed in between runs), its token goes on every
 request, and an expiring or rejected token is renewed with the refresh token. Also: magic links, social sign-in (`oauth_url`, `exchange_code`), email
 verification, password reset, linked identities, `pb.auth.mfa` (authenticator app, emailed codes, recovery codes), `pb.auth.sessions`, `pb.auth.devices`,
-`pb.auth.api_keys` (keys a user makes for themselves), `pb.auth.machine` and `pb.as_machine(...)` (a service or AI agent signing in with its client id and key), and `pb.auth.orgs` (organizations, members, invitations, teams).
+`pb.auth.api_keys` (keys a user makes for themselves), `pb.auth.machine` and `pb.as_machine(...)` (a service or AI agent signing in with its client id and key), and `pb.auth.orgs` (organizations, members, invitations, teams, roles and permissions, email domains, security, activity, `joinable` / `join`).
+
+**Bot protection.** On a server, `pb.captcha.verify(pass_, action="contact")` checks the pass a form received. In an app with a publishable key, `pb.captcha.protect("signin")["pass"]` earns one; protected auth calls take it as `captcha_token=`.
 
 More ways in: guest sessions (`sign_in_anonymously()`, then `upgrade_anonymous(email=…, password=…)` keeps what the guest made), emailed codes
 (`send_email_code(email=…)` then `verify_email_code(email=…, code=…)`), and passkeys (`pb.auth.passkeys`: `register_options` / `register_verify` and

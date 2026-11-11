@@ -31,6 +31,10 @@ def rate_wait(response: httpx.Response) -> float:
         return 1.0
 
 
+#: "Not given", where ``None`` is a meaningful value.
+UNSET: Any = object()
+
+
 def then(value: Any, function: Callable[[Any], Any]) -> Any:
     """Apply *function* to a result that is a value (blocking client) or an awaitable (async client): the logic is written once."""
     if inspect.isawaitable(value):

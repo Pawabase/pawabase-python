@@ -28,6 +28,7 @@ from .admin import Admin
 from .ai import Ai
 from .auth import Auth, SessionStore
 from .callables import Flows, Routes
+from .captcha import Captcha
 from .data import AsyncResource, Resource
 from .errors import NetworkError, PawabaseError, failure
 from .manage import Manage
@@ -77,6 +78,7 @@ class _Base:
         self.flows = Flows(self)
         self.routes = Routes(self)
         self.realtime = Realtime(self)
+        self.captcha = Captcha(self)
         self.manage = Manage(self)
         self.admin = Admin(self)
 

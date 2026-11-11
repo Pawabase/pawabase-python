@@ -125,7 +125,7 @@ class _Query:
     def __init__(self, client: Any, resource: str, state: dict[str, Any] | None = None) -> None:
         self._client = client
         self.resource = resource
-        self._s: dict[str, Any] = state or {"filters": {}, "sort": [], "select": None, "expand": [], "page": 1, "per_page": None, "paginate": True, "empty": False}
+        self._s: dict[str, Any] = state or {"filters": {}, "sort": [], "select": None, "expand": [], "search": None, "page": 1, "per_page": None, "paginate": True, "empty": False}
 
     def _with(self, **change: Any) -> Any:
         state = {**self._s, "filters": dict(self._s["filters"]), "sort": list(self._s["sort"]), "expand": list(self._s["expand"]), **change}
@@ -217,6 +217,10 @@ class _Query:
         """Embed related records: ``expand("author", "comments")``."""
         return self._with(expand=[*self._s["expand"], *relations])
 
+    def search(self, text: str | None) -> Any:
+        """Full-text search over the fields the resource lists under ``operations.list.search.fields``. Empty clears it."""
+        return self._with(search=text.strip() if text and text.strip() else None)
+
     def page(self, number: int) -> Any:
         return self._with(page=number)
 
@@ -238,6 +242,8 @@ class _Query:
             params["select"] = ",".join(s["select"])
         if s["expand"]:
             params["expand"] = ",".join(dict.fromkeys(s["expand"]))
+        if s.get("search"):
+            params["q"] = s["search"]
         if not s["paginate"]:
             params["paginate"] = "false"
             return params
@@ -443,6 +449,9 @@ class _ResourceBase:
 
     def expand(self, *relations: str) -> Any:
         return self.query().expand(*relations)
+
+    def search(self, text: str | None) -> Any:
+        return self.query().search(text)
 
     def page(self, number: int) -> Any:
         return self.query().page(number)
