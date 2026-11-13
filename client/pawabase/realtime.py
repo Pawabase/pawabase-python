@@ -5,12 +5,12 @@ Publishing, presence and history work over plain HTTP on either client. A live s
 
     async with AsyncPawabase(url, key) as pb:
         room = pb.realtime.channel("chat:lobby", presence={"name": "Ada"})
-        room.on("message", lambda m: print(m["payload"]))
+        room.on(None, lambda m: print(m["payload"]))                      # None: every message; "message" would hear only that event name
         await room.subscribe()
         await room.send("message", {"text": "hello"})
         async for message in pb.realtime.channel("resource:posts"):      # a resource with realtime on: its changes, as you may read them
             print(message["event"], message["payload"]["record"])
-        async with pb.realtime.live("tasks", filter={"done": "eq.false"}, sort="-created_at") as tasks:
+        async with pb.realtime.live("tasks", filter={"done": "is.false"}, sort="-created_at") as tasks:
             async for result in tasks:                                     # a live query: the whole result, again whenever it changes
                 print(result["data"])
 
@@ -170,6 +170,7 @@ class Realtime:
         """A live query: the result of ``GET /rest/v1/<resource>`` with these options, sent again whenever it changes.
 
         The same filters, sort, search and list policy apply, so you only get rows you could read. The table needs *Broadcast changes* on.
+        ``filter`` is sent as written (``{"status": "eq.paid"}``): test booleans and nulls with ``is`` (``{"done": "is.false"}``). ``limit`` is 1 to 200.
         ``await live.start()`` (or ``async with``) opens it and returns the first result; iterate it, or use ``on_change``, for the next ones.
         It reopens by itself after a reconnect.
         """

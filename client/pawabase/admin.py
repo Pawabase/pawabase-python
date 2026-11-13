@@ -141,8 +141,19 @@ class Orgs(_Admin):
             body["owner_email"] = owner_email
         return self.post("/orgs", body)
 
-    def update(self, slug: str, *, name: str | None = None, metadata: Mapping[str, Any] | None = None) -> Any:
-        return self.patch(seg("orgs", slug), {k: v for k, v in {"name": name, "metadata": metadata}.items() if v is not None})
+    def update(
+        self, slug: str, *, name: str | None = None, metadata: Mapping[str, Any] | None = None, app_metadata: Mapping[str, Any] | None = None,
+        max_members: Any = _core.UNSET, require_mfa: bool | None = None, suspended: bool | None = None,
+    ) -> Any:
+        """Change an organization. ``metadata`` and ``app_metadata`` replace what is there; ``app_metadata`` is data only your server can change
+        (a plan, a customer id). ``max_members`` sets the seats (``None`` removes the limit; leave it out to keep it), ``require_mfa`` makes members
+        use a second factor, and ``suspended`` stops everyone working in it until set back to ``False``."""
+        body: dict[str, Any] = {k: v for k, v in {"name": name, "metadata": dict(metadata) if metadata is not None else None,
+                                                   "app_metadata": dict(app_metadata) if app_metadata is not None else None,
+                                                   "require_mfa": require_mfa, "suspended": suspended}.items() if v is not None}
+        if max_members is not _core.UNSET:
+            body["max_members"] = max_members
+        return self.patch(seg("orgs", slug), body)
 
     def remove(self, slug: str) -> Any:
         return self.delete(seg("orgs", slug))

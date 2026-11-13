@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.0
+
+- **Mail:** `pb.manage.mail` gains `send`, `message`, `retry`, `cancel`, `stats` and `template_usage`; `log` takes `template`, `q` and `offset`.
+- **Admin:** `pb.admin.orgs.update` takes `app_metadata`, `max_members` (`None` removes the limit), `require_mfa` and `suspended`.
+- **Records:** `similar(where={...})` narrows the candidates like a list read.
+- **Storage:** `transform_url` takes `rotate`; its docs list the fits the server supports (`contain`, `cover`, `fill`).
+- **Errors:** `error.code` is also read from a body's `code` field, so `mfa_setup_required` and similar refusals carry their code.
+- **Fixed:** on the async client, a query with an empty `in_()` list crashed instead of returning an empty page.
+- Docs: realtime examples use `on(None, …)` for every message and `is.false` for boolean live-query filters; `status_page.configure`
+  replaces the whole setup.
+
 ## 0.7.0
 
 - **Bot protection:** `pb.captcha.verify(pass_, action=..., remoteip=...)` checks a pass your form received (server, secret key), with

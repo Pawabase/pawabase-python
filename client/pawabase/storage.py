@@ -120,11 +120,15 @@ class Bucket:
         """A URL for an object of a *public* bucket, needing no key. (A private bucket answers 404: use :meth:`create_signed_url`.)"""
         return self._c.url_for(f"/storage/v1/files/{_core.path_of(self._c.environment)}/{_core.path_of(self.name)}/{_core.key_path(key)}")
 
-    def transform_url(self, key: str, *, width: int | None = None, height: int | None = None, fit: str | None = None, format: str | None = None, quality: int | None = None) -> str:
-        """The public URL of a resized or re-encoded image (``fit``: ``cover``, ``contain``, ``fill``, ``inside``, ``outside``; ``format``: ``webp``, ``avif``, ``jpeg``, ``png``)."""
+    def transform_url(
+        self, key: str, *, width: int | None = None, height: int | None = None, fit: str | None = None, format: str | None = None, quality: int | None = None,
+        rotate: int | None = None,
+    ) -> str:
+        """The public URL of a resized or re-encoded image (``fit``: ``contain``, ``cover`` or ``fill``; ``format``: ``webp``, ``avif``, ``jpeg``, ``png``
+        or ``auto``; ``quality`` 1 to 100; ``rotate`` in degrees)."""
         return self._c.url_for(
             f"/storage/v1/files/{_core.path_of(self._c.environment)}/{_core.path_of(self.name)}/{_core.key_path(key)}",
-            width=width, height=height, fit=fit, format=format, quality=quality,
+            width=width, height=height, fit=fit, format=format, quality=quality, rotate=rotate,
         )
 
     def create_signed_url(self, key: str, *, expires_in: int = 300) -> Any:

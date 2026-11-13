@@ -127,7 +127,8 @@ class StatusPage(Service):
     def configure(
         self, *, enabled: bool = True, title: str = "Status", description: str = "", contact_url: str = "", components: Sequence[dict[str, Any]] = (),
     ) -> Any:
-        """``components``: ``{name, source, description}``; ``source`` is ``gateway``, ``api``, ``auth``, ``realtime``, ``workers`` (measured) or ``manual``."""
+        """Replace the status page's setup, components included: pass every component each time. ``components``: ``{name, source, description}``;
+        ``source`` is ``gateway``, ``api``, ``auth``, ``realtime``, ``workers`` (measured) or ``manual``."""
         return self.put("/status-page", {"enabled": enabled, "title": title, "description": description, "contact_url": contact_url, "components": list(components)})
 
     def incidents(self) -> Any:

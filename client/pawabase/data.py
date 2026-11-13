@@ -259,8 +259,8 @@ class _Query:
     def _fetch(self) -> Any:
         if self._s["empty"]:
             if not self._s["paginate"]:
-                return Page([], None, None, 0)
-            return Page([], self._s["page"], self._s["per_page"] or 20, 0)
+                return _resolved(self._client, Page([], None, None, 0))
+            return _resolved(self._client, Page([], self._s["page"], self._s["per_page"] or 20, 0))
         return _core.then(self._client._call("GET", f"/rest/v1/{_core.key_path(self.resource)}", params=self._params() or None, retry=True), self._page_of)
 
     def _count_of(self, page: Page) -> int:
@@ -369,6 +369,17 @@ class AsyncQuery(_Query):
         return self.iterate()
 
 
+def _resolved(client: Any, value: Any) -> Any:
+    """*value* as the client answers: as it is on the blocking client, an awaitable on the async one."""
+    if getattr(client, "is_async", False):
+
+        async def done() -> Any:
+            return value
+
+        return done()
+    return value
+
+
 def _expand_params(expand: Sequence[str] | None) -> dict[str, Any] | None:
     return {"expand": ",".join(expand)} if expand else None
 
@@ -386,14 +397,24 @@ class _ResourceBase:
 
     def similar(
         self, *, text: str | None = None, vector: Sequence[float] | None = None, field: str | None = None, metric: str = "cosine", limit: int = 10,
-        max_distance: float | None = None,
+        max_distance: float | None = None, where: Mapping[str, Any] | None = None,
     ) -> Any:
         """Records closest in meaning, closest first, each with a ``distance`` (smaller is closer).
 
         Give ``text`` (turned into a vector by the field's embedding model) or a ``vector``. Vector fields are left out of the records.
+        ``where`` narrows the candidates as a list read would: ``{"status": "live", "price": {"lte": 50}}``, one condition per field.
         """
+        params: dict[str, str] = {}
+        for column, condition in (where or {}).items():
+            op, value = next(iter(condition.items())) if isinstance(condition, Mapping) else ("eq", condition)
+            encoded = encode_filter(column, op, value)
+            if encoded == "empty":
+                return _resolved(self._client, {"data": [], "metric": metric, "count": 0})
+            if encoded == "skip":
+                continue
+            params[f"filter[{column}]"] = f"{encoded[0]}.{encoded[1]}"
         body = _core.compact({"text": text, "vector": list(vector) if vector is not None else None, "field": field, "metric": metric, "limit": limit, "max_distance": max_distance})
-        return self._client._call("POST", f"{self._path()}/similar", json=body)
+        return self._client._call("POST", f"{self._path()}/similar", json=body, params=params or None)
 
     def query(self) -> Any:
         return self.query_class(self._client, self.name)
