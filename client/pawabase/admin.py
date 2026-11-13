@@ -6,6 +6,7 @@ user of one environment is never visible in another.
     pb.admin.users.create(email="ada@example.com", password="…", roles=["editor"])
     pb.admin.users.update(user_id, disabled=True)
     pb.admin.orgs.add_member("acme", email="ada@example.com", role="admin")
+    pb.admin.sso_connections.create("acme-okta", type="oidc", organization="acme", settings={"issuer": …, "client_id": …, "client_secret": …})
 """
 
 from __future__ import annotations
@@ -173,6 +174,62 @@ class Orgs(_Admin):
         return self.post(seg("orgs", slug, "invitations"), {"email": email, "role": role, **({"redirect_to": redirect_to} if redirect_to else {})})
 
 
+class SsoConnections(_Admin):
+    """Company logins (enterprise SSO). Each belongs to one organization and signs in the people at the email domains it verified, making
+    them members as they arrive. Provider details go in ``settings``: ``issuer``, ``client_id``, ``client_secret`` (OIDC) or
+    ``idp_entity_id``, ``idp_sso_url``, ``idp_cert`` (SAML)."""
+
+    def list(self) -> Any:
+        return self.get("/sso-connections")
+
+    def get_connection(self, name: str) -> Any:
+        return self.get(seg("sso-connections", name))
+
+    def create(
+        self, name: str, *, type: str, organization: str, settings: Mapping[str, Any] | None = None, enabled: bool | None = None,
+        trust_email: bool | None = None, default_role: str | None = None, groups_attribute: str | None = None,
+        role_mapping: Mapping[str, str] | None = None, required: bool | None = None,
+    ) -> Any:
+        """Give an organization its company login. One per organization; ``name`` is part of its addresses and cannot change."""
+        body = {"name": name, "type": type, "organization": organization}
+        body.update(_sso_fields(settings, enabled, trust_email, default_role, groups_attribute, role_mapping, required))
+        return self.post("/sso-connections", body)
+
+    def update(
+        self, name: str, *, settings: Mapping[str, Any] | None = None, enabled: bool | None = None, trust_email: bool | None = None,
+        default_role: str | None = None, groups_attribute: str | None = None, role_mapping: Mapping[str, str] | None = None,
+        required: bool | None = None,
+    ) -> Any:
+        """Change a connection. ``settings`` are merged into what is stored (an empty string clears one); ``required`` refuses every other way
+        in for people at the organization's verified domains."""
+        return self.patch(
+            seg("sso-connections", name), _sso_fields(settings, enabled, trust_email, default_role, groups_attribute, role_mapping, required)
+        )
+
+    def test(self, name: str) -> Any:
+        """Check the provider can be reached (OIDC discovery) or its certificate read (SAML)."""
+        return self.post(seg("sso-connections", name, "test"), {})
+
+    def remove(self, name: str) -> Any:
+        return self.delete(seg("sso-connections", name))
+
+
+def _sso_fields(
+    settings: Mapping[str, Any] | None, enabled: bool | None, trust_email: bool | None, default_role: str | None,
+    groups_attribute: str | None, role_mapping: Mapping[str, str] | None, required: bool | None,
+) -> dict[str, Any]:
+    fields = {
+        "settings": dict(settings) if settings is not None else None,
+        "enabled": enabled,
+        "trust_email": trust_email,
+        "default_role": default_role,
+        "groups_attribute": groups_attribute,
+        "role_mapping": dict(role_mapping) if role_mapping is not None else None,
+        "required": required,
+    }
+    return {key: value for key, value in fields.items() if value is not None}
+
+
 class Invitations(_Admin):
     def list(self) -> Any:
         """Pending and past invitations across organizations."""
@@ -304,6 +361,7 @@ class Admin:
     users: Users
     roles: Roles
     orgs: Orgs
+    sso_connections: SsoConnections
     invitations: Invitations
     sessions: Sessions
     api_keys: ApiKeys
@@ -318,6 +376,7 @@ class Admin:
         self.users = Users(client, environment)
         self.roles = Roles(client, environment)
         self.orgs = Orgs(client, environment)
+        self.sso_connections = SsoConnections(client, environment)
         self.invitations = Invitations(client, environment)
         self.sessions = Sessions(client, environment)
         self.api_keys = ApiKeys(client, environment)

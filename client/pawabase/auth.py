@@ -24,8 +24,8 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from . import _core
+from .errors import ConfigError, NotFoundError
 from .storage import _content
-from .errors import ConfigError
 
 REFRESH_SKEW = 30  # seconds before expiry at which a token is renewed
 
@@ -278,6 +278,31 @@ class Auth:
         return self._c.url_for(
             f"/auth/v1/authorize/{_core.path_of(self._c.environment)}/{_core.path_of(provider)}", **{"redirect_to": redirect_to, "apikey": self._c.api_key, **(extra or {})}
         )
+
+    def find_sso(self, *, email: str | None = None, organization: str | None = None) -> Any:
+        """The company login (enterprise SSO connection) that serves an email address or an organization: ``{connection, type,
+        organization, required, url}``, or ``None`` when there is none. ``required`` means no other way in is accepted for that address."""
+        body = _core.compact({"email": email, "organization": organization})
+        if self._c.is_async:
+            return self._find_sso_async(body)
+        try:
+            return self._c._call("POST", "/auth/v1/sso/lookup", json=body, auth=False)
+        except NotFoundError:
+            return None
+
+    async def _find_sso_async(self, body: Mapping[str, Any]) -> Any:
+        try:
+            return await self._c._call("POST", "/auth/v1/sso/lookup", json=body, auth=False)
+        except NotFoundError:
+            return None
+
+    def sso_url(self, *, email: str | None = None, organization: str | None = None, redirect_to: str | None = None) -> Any:
+        """Where to send a browser to sign in with the company login for an email address or organization, or ``None`` when there is none."""
+
+        def address(found: Any) -> str | None:
+            return self.oauth_url(found["connection"], redirect_to=redirect_to) if found else None
+
+        return _core.then(self.find_sso(email=email, organization=organization), address)
 
     def exchange_code(self, code: str, *, code_verifier: str | None = None) -> Any:
         """Trade the ``code`` a sign-in redirect carried for a session (with the verifier of a PKCE ``code_challenge``)."""

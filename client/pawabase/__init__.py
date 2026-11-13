@@ -45,7 +45,7 @@ from .errors import (  # noqa: E402
     ValidationError,
 )
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 __all__ = [
     "AsyncPawabase",
     "AuthenticationError",

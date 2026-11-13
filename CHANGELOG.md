@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.0
+
+- **Enterprise sign-in:** `pb.auth.find_sso(email=… | organization=…)` answers the company login that serves an address (or `None`), and
+  `pb.auth.sso_url(...)` the address to send the browser to.
+- **Admin:** `pb.admin.sso_connections` (`list`, `get_connection`, `create`, `update`, `test`, `remove`) manages organizations' company logins.
+
 ## 0.8.0
 
 - **Mail:** `pb.manage.mail` gains `send`, `message`, `retry`, `cancel`, `stats` and `template_usage`; `log` takes `template`, `q` and `offset`.

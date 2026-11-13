@@ -59,3 +59,41 @@ def test_mail_send_retry_cancel_and_stats(wire):
 def test_transform_url_carries_rotate(pb):
     url = pb.storage.from_("avatars").transform_url("me.png", width=96, fit="cover", rotate=90)
     assert "rotate=90" in url and "fit=cover" in url
+
+
+SSO = {"connection": "acme-okta", "type": "oidc", "organization": {"slug": "acme", "name": "Acme"}, "required": True, "url": "https://x"}
+
+
+def test_find_sso_answers_the_company_login_or_none(wire, pb):
+    wire.answer(httpx.Response(200, json=SSO))
+    assert pb.auth.find_sso(email="ada@acme.com") == SSO
+    assert wire.last.url.path == "/auth/v1/sso/lookup" and wire.json() == {"email": "ada@acme.com"}
+    wire.answer(httpx.Response(404, json={"detail": "no enterprise sign-in for this address"}))
+    assert pb.auth.find_sso(email="eve@gmail.com") is None
+    wire.answer(httpx.Response(200, json=SSO))
+    assert "/auth/v1/authorize/" in pb.auth.sso_url(organization="acme", redirect_to="https://app.test/cb")
+
+
+async def test_find_sso_on_the_async_client(wire):
+    apb = make_async(wire)
+    wire.answer(httpx.Response(404, json={"detail": "none"}))
+    assert await apb.auth.find_sso(email="eve@gmail.com") is None
+    assert await apb.auth.sso_url(email="eve@gmail.com") is None
+
+
+def test_a_required_company_login_refuses_a_password(wire, pb):
+    wire.answer(httpx.Response(403, json={"code": "sso_required", "message": "Acme signs its people in with its company login", "connection": "acme-okta", "organization": "acme"}))
+    with pytest.raises(ForbiddenError) as raised:
+        pb.auth.sign_in_with_password(email="ada@acme.com", password="p")
+    assert raised.value.code == "sso_required" and raised.value.detail["connection"] == "acme-okta"
+
+
+def test_admin_sso_connections(wire):
+    sk = make(wire, key="pb_sk_x", environment="production")
+    sk.admin.sso_connections.create("acme-okta", type="oidc", organization="acme", settings={"issuer": "https://acme.okta.com"}, default_role="viewer")
+    assert wire.last.url.path == f"{BASE}/auth/sso-connections"
+    assert wire.json() == {"name": "acme-okta", "type": "oidc", "organization": "acme", "settings": {"issuer": "https://acme.okta.com"}, "default_role": "viewer"}
+    sk.admin.sso_connections.update("acme-okta", enabled=True, required=True, role_mapping={"Admins": "admin"})
+    assert wire.last.method == "PATCH" and wire.json() == {"enabled": True, "role_mapping": {"Admins": "admin"}, "required": True}
+    sk.admin.sso_connections.test("acme-okta")
+    assert wire.last.url.path == f"{BASE}/auth/sso-connections/acme-okta/test"
