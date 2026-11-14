@@ -30,7 +30,7 @@ from .auth import Auth, SessionStore
 from .callables import Flows, Routes
 from .captcha import Captcha
 from .data import AsyncResource, Resource
-from .errors import NetworkError, PawabaseError, failure
+from .errors import ConfigError, NetworkError, PawabaseError, failure
 from .manage import Manage
 from .realtime import Realtime
 from .storage import Storage
@@ -49,7 +49,8 @@ class _Base:
         url: str,
         api_key: str,
         *,
-        environment: str = "development",
+        project: str | None = None,
+        environment: str | None = None,
         timeout: float = 30.0,
         retries: int = 2,
         session_store: SessionStore | None = None,
@@ -57,8 +58,12 @@ class _Base:
         auto_refresh: bool = True,
         headers: Mapping[str, str] | None = None,
     ) -> None:
+        if not project or not isinstance(project, str):
+            raise ConfigError("Pass project=: your project's id, from Studio → Overview → Connect.")
         self.url = url.rstrip("/")
         self.api_key = api_key
+        self.project = project
+        #: The environment by its name in the project (``production``); ``None`` means the project's default environment.
         self.environment = environment
         self.timeout = timeout
         self.retries = retries
@@ -83,7 +88,7 @@ class _Base:
         self.admin = Admin(self)
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(url={self.url!r}, environment={self.environment!r}, api_key=<hidden>)"
+        return f"{type(self).__name__}(url={self.url!r}, project={self.project!r}, environment={self.environment!r}, api_key=<hidden>)"
 
     # ── data ─────────────────────────────────────────────────────────────
 
@@ -99,7 +104,13 @@ class _Base:
     @property
     def headers(self) -> dict[str, str]:
         # The gateway turns this key into a signed environment context; the raw key is never forwarded to a function or an internal service.
-        return {"apikey": self.api_key, "x-environment": self.environment, "user-agent": USER_AGENT, **self.extra_headers}
+        named = {"x-environment": self.environment} if self.environment else {}
+        return {"apikey": self.api_key, "x-project-id": self.project, **named, "user-agent": USER_AGENT, **self.extra_headers}
+
+    @property
+    def env_segment(self) -> str:
+        """How a keyless path names the environment: ``<project>.<environment>``, or the project alone for its default environment."""
+        return f"{self.project}.{self.environment}" if self.environment else self.project
 
     def as_user(self, token: str | None, **headers: str) -> Any:
         """A view of this client that acts as one signed-in user: the same connection pool, ``Authorization: Bearer <token>`` on every request.
@@ -185,8 +196,10 @@ class Pawabase(_Base):
 
     Args:
         url: The gateway URL.
-        api_key: A publishable or secret key of the environment.
-        environment: The environment name, such as ``development`` (used by ``pb.manage`` and ``pb.admin``).
+        api_key: A publishable or secret key of the project.
+        project: The project's id (Studio → Overview → Connect). Required: every request names it, and the key must belong to it.
+        environment: The environment by its name in the project (``production``). Left out, the project's default environment (or
+            the key's only one, when it is limited to one).
         timeout: Seconds per request.
         retries: Extra attempts for reads that fail with a connection error or a 502/503/504.
         session_store: Where a signed-in session is kept between runs (see :class:`~pawabase.auth.FileSessionStore`); memory by default.

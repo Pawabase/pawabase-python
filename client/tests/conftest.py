@@ -45,12 +45,16 @@ def wire():
 
 
 def make(wire: Wire, key: str = "pb_pk_test", **options) -> Pawabase:
+    options.setdefault("project", "P1")
+    options.setdefault("environment", "development")
     client = Pawabase(URL, key, retries=0, **options)
     client._client = httpx.Client(transport=httpx.MockTransport(wire), base_url=URL, headers=client.headers)
     return client
 
 
 def make_async(wire: Wire, key: str = "pb_pk_test", **options) -> AsyncPawabase:
+    options.setdefault("project", "P1")
+    options.setdefault("environment", "development")
     client = AsyncPawabase(URL, key, retries=0, **options)
     client._client = httpx.AsyncClient(transport=httpx.MockTransport(wire), base_url=URL, headers=client.headers)
     return client

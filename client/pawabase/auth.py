@@ -276,7 +276,7 @@ class Auth:
         if _core.is_secret_key(self._c.api_key):
             raise ConfigError("Refusing to put a secret key in a URL: use a publishable key for social sign-in.")
         return self._c.url_for(
-            f"/auth/v1/authorize/{_core.path_of(self._c.environment)}/{_core.path_of(provider)}", **{"redirect_to": redirect_to, "apikey": self._c.api_key, **(extra or {})}
+            f"/auth/v1/authorize/{_core.path_of(self._c.env_segment)}/{_core.path_of(provider)}", **{"redirect_to": redirect_to, "apikey": self._c.api_key, **(extra or {})}
         )
 
     def find_sso(self, *, email: str | None = None, organization: str | None = None) -> Any:
@@ -453,7 +453,7 @@ class Auth:
 
     def jwks(self) -> Any:
         """The public keys that verify integration tokens (:meth:`issue_token`): ``{"keys": [...]}``, for a server checking them."""
-        return self._c._call("GET", f"/auth/v1/token-keys/{_core.path_of(self._c.environment)}/jwks", retry=True, auth=False)
+        return self._c._call("GET", f"/auth/v1/token-keys/{_core.path_of(self._c.env_segment)}/jwks", retry=True, auth=False)
 
     def issue_token(self, profile: str) -> Any:
         """Exchange the signed-in session for a short-lived token for another service, shaped by a token profile you defined in Studio:

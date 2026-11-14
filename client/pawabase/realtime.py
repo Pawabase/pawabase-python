@@ -184,7 +184,7 @@ class Realtime:
     def _url(self) -> str:
         parts = urlsplit(self._c.url)
         scheme = "wss" if parts.scheme == "https" else "ws"
-        query = {"apikey": self._c.api_key, "environment": self._c.environment}
+        query = {"apikey": self._c.api_key, "project": self._c.project, **({"environment": self._c.environment} if self._c.environment else {})}
         token = self._c.auth.access_token
         if token:
             query["token"] = token

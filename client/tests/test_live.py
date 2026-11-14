@@ -1,6 +1,6 @@
 """The SDK against a real Pawabase gateway. Skipped unless these are set:
 
-    PAWABASE_LIVE_URL=http://localhost:8080  PAWABASE_LIVE_ENV=demo-ts-dev
+    PAWABASE_LIVE_URL=http://localhost:8080  PAWABASE_LIVE_PROJECT=<project id>  PAWABASE_LIVE_ENV=development
     PAWABASE_LIVE_PUBLISHABLE=pb_pk_…         PAWABASE_LIVE_SECRET=pb_sk_…
 
 It creates a resource and a bucket of its own (``sdk_live_*``) and removes them afterwards.
@@ -14,10 +14,11 @@ import pytest
 from pawabase import AsyncPawabase, ConflictError, NotFoundError, Pawabase
 
 URL = os.environ.get("PAWABASE_LIVE_URL", "")
+PROJECT = os.environ.get("PAWABASE_LIVE_PROJECT", "")
 ENV = os.environ.get("PAWABASE_LIVE_ENV", "development")
 PUBLISHABLE = os.environ.get("PAWABASE_LIVE_PUBLISHABLE", "")
 SECRET = os.environ.get("PAWABASE_LIVE_SECRET", "")
-pytestmark = pytest.mark.skipif(not (URL and PUBLISHABLE and SECRET), reason="needs a running gateway (PAWABASE_LIVE_*)")
+pytestmark = pytest.mark.skipif(not (URL and PROJECT and PUBLISHABLE and SECRET), reason="needs a running gateway (PAWABASE_LIVE_*)")
 
 RESOURCE = "sdk_live_" + uuid.uuid4().hex[:6]
 BUCKET = "sdk-live-" + uuid.uuid4().hex[:6]
@@ -25,7 +26,7 @@ BUCKET = "sdk-live-" + uuid.uuid4().hex[:6]
 
 @pytest.fixture(scope="module")
 def admin():
-    with Pawabase(URL, SECRET, environment=ENV) as client:
+    with Pawabase(URL, SECRET, project=PROJECT, environment=ENV) as client:
         client.manage.resources.create(
             {
                 "name": RESOURCE,
@@ -48,7 +49,7 @@ def admin():
 
 @pytest.fixture
 def pb(admin):
-    with Pawabase(URL, PUBLISHABLE, environment=ENV) as client:
+    with Pawabase(URL, PUBLISHABLE, project=PROJECT, environment=ENV) as client:
         yield client
 
 
@@ -107,7 +108,7 @@ def test_flows_and_the_management_plane(pb, admin):
 
 
 async def test_the_async_client_and_live_realtime(admin):
-    async with AsyncPawabase(URL, PUBLISHABLE, environment=ENV) as apb:
+    async with AsyncPawabase(URL, PUBLISHABLE, project=PROJECT, environment=ENV) as apb:
         created = await apb.from_(RESOURCE).create(title="async")
         assert (await apb.from_(RESOURCE).eq("title", "async").single())["id"] == created["id"]
         assert await apb.from_(RESOURCE).count() >= 1

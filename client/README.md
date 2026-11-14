@@ -12,7 +12,12 @@ pip install "pawabase[realtime]"         # + websockets, for live channels
 ```python
 from pawabase import Pawabase
 
-pb = Pawabase("https://api.example.com", "pb_pk_…")      # AsyncPawabase for asyncio: the same methods, awaited
+pb = Pawabase(
+    "https://api.example.com",   # your gateway
+    "pb_pk_…",                   # a key of the project
+    project="01JC4…",            # the project's id (Studio → Overview → Connect)
+    environment="production",    # optional: its name in the project; left out, the project's default
+)                                # AsyncPawabase for asyncio: the same methods, awaited
 ```
 
 A **publishable** key (`pb_pk_…`) is what an app holds: policies decide what it can do, and a signed-in user's token goes on top. A **secret** key
@@ -96,7 +101,7 @@ pb.routes.post("orders/42/pay", method="card")
 ## Realtime
 
 ```python
-async with AsyncPawabase(url, key) as pb:
+async with AsyncPawabase(url, key, project=project) as pb:
     room = pb.realtime.channel("chat:lobby", presence={"name": "Ada"})
     room.on("message", lambda m: print(m["payload"]))
     await room.subscribe()
@@ -113,7 +118,7 @@ Without a socket: `pb.realtime.sse(["chat:lobby"])` listens over Server-Sent Eve
 ## Administering users and the environment (secret key)
 
 ```python
-admin = Pawabase(url, "pb_sk_…", environment="production")
+admin = Pawabase(url, "pb_sk_…", project=project, environment="production")
 
 admin.admin.users.create(email="ada@example.com", password="…", roles=["editor"])
 admin.admin.users.update(user_id, disabled=True)

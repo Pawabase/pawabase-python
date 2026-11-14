@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from pawabase import ConfigError
+from pawabase import ConfigError, Pawabase
 from tests.conftest import make, make_async
 
 
@@ -24,9 +24,9 @@ def test_list_all_follows_the_cursor(wire, pb):
 
 def test_urls_and_signed_links(wire, pb):
     bucket = pb.storage.from_("av")
-    assert bucket.public_url("a b.png") == "http://gateway.test/storage/v1/files/development/av/a%20b.png"
+    assert bucket.public_url("a b.png") == "http://gateway.test/storage/v1/files/P1.development/av/a%20b.png"
     assert bucket.transform_url("a.png", width=200, fit="cover", format="webp") == (
-        "http://gateway.test/storage/v1/files/development/av/a.png?width=200&fit=cover&format=webp"
+        "http://gateway.test/storage/v1/files/P1.development/av/a.png?width=200&fit=cover&format=webp"
     )
     wire.answer(httpx.Response(200, json={"url": "u", "expires_at": 1, "method": "GET"}))
     bucket.create_signed_url("a.png", expires_in=60)
@@ -63,3 +63,15 @@ async def test_realtime_over_http_and_the_async_only_channel(wire):
     wire.answer(httpx.Response(200, json={"messages": [{"id": "1"}]}))
     assert await make_async(wire).realtime.history("c", 5) == [{"id": "1"}]
     assert isinstance(blocking, Pawabase)
+
+
+def test_a_client_names_its_project_and_optionally_its_environment(wire):
+    default = make(wire, environment=None)
+    assert default.storage.from_("av").public_url("a.png") == "http://gateway.test/storage/v1/files/P1/av/a.png"
+    default.request("GET", "/rest/v1/posts")
+    assert wire.last.headers["x-project-id"] == "P1" and "x-environment" not in wire.last.headers
+    named = make(wire, environment="production")
+    named.request("GET", "/rest/v1/posts")
+    assert wire.last.headers["x-environment"] == "production"
+    with pytest.raises(ConfigError, match="project="):
+        Pawabase("http://gateway.test", "pb_pk_test")

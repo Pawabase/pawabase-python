@@ -63,7 +63,7 @@ async def gateway():
 
 async def test_subscribe_send_receive_presence_and_history(gateway):
     server, url = gateway
-    async with AsyncPawabase(url, "pb_pk_test", environment="dev") as pb:
+    async with AsyncPawabase(url, "pb_pk_test", project="P1", environment="dev") as pb:
         room = pb.realtime.channel("chat:lobby", presence={"name": "Ada"})
         heard, joins = [], []
         room.on("say", lambda m: heard.append(m["payload"]))
@@ -80,7 +80,7 @@ async def test_subscribe_send_receive_presence_and_history(gateway):
 
 async def test_a_refused_channel_raises_with_the_servers_reason(gateway):
     _, url = gateway
-    async with AsyncPawabase(url, "pb_pk_test") as pb:
+    async with AsyncPawabase(url, "pb_pk_test", project="P1") as pb:
         with pytest.raises(RealtimeError) as raised:
             await pb.realtime.channel("secret").subscribe()
         assert raised.value.code == "forbidden"
@@ -88,7 +88,7 @@ async def test_a_refused_channel_raises_with_the_servers_reason(gateway):
 
 async def test_iterating_a_channel_yields_its_messages_and_ends_on_close(gateway):
     _, url = gateway
-    pb = AsyncPawabase(url, "pb_pk_test")
+    pb = AsyncPawabase(url, "pb_pk_test", project="P1")
     room = pb.realtime.channel("c")
     await room.subscribe()
     await room.send("e", {"n": 1})
@@ -101,7 +101,7 @@ async def test_iterating_a_channel_yields_its_messages_and_ends_on_close(gateway
 
 async def test_a_live_query_gives_its_result_then_every_change(gateway):
     server, url = gateway
-    async with AsyncPawabase(url, "pb_pk_test") as pb:
+    async with AsyncPawabase(url, "pb_pk_test", project="P1") as pb:
         seen = []
         tasks = pb.realtime.live("tasks", filter={"done": "eq.false"}, sort="-id", limit=10).on_change(lambda r: seen.append([t["title"] for t in r["data"]]))
         first = await tasks.start()
@@ -118,7 +118,7 @@ async def test_a_live_query_gives_its_result_then_every_change(gateway):
 
 async def test_a_refused_or_closed_live_query_raises(gateway):
     server, url = gateway
-    async with AsyncPawabase(url, "pb_pk_test") as pb:
+    async with AsyncPawabase(url, "pb_pk_test", project="P1") as pb:
         with pytest.raises(RealtimeError) as raised:
             await pb.realtime.live("secret").start()
         assert raised.value.code == "forbidden"

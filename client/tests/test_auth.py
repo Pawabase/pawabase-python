@@ -96,7 +96,7 @@ def test_a_session_survives_in_a_file_store(wire, tmp_path):
 
 def test_oauth_urls_never_carry_a_secret_key(wire):
     assert make(wire).auth.oauth_url("google", redirect_to="https://app.example/cb") == (
-        "http://gateway.test/auth/v1/authorize/development/google?redirect_to=https%3A%2F%2Fapp.example%2Fcb&apikey=pb_pk_test"
+        "http://gateway.test/auth/v1/authorize/P1.development/google?redirect_to=https%3A%2F%2Fapp.example%2Fcb&apikey=pb_pk_test"
     )
     with pytest.raises(ConfigError, match="secret key"):
         make(wire, key="pb_sk_x").auth.oauth_url("google")

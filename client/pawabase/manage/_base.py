@@ -19,7 +19,8 @@ class Service:
 
     @property
     def env(self) -> str:
-        return self._environment or self._c.environment
+        # The project's id in the environment's place means the environment the request is served by (the default, if none is named).
+        return self._environment or self._c.environment or self._c.project
 
     def path(self, suffix: str = "") -> str:
         return f"/platform/v1/envs/{_core.path_of(self.env)}{suffix}"
