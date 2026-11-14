@@ -297,11 +297,15 @@ class Realtime:
         elif kind == "presence_state":
             channel = self._channels.get(str(frame.get("channel")))
             if channel:
-                channel._members = {str(m.get("id") or m.get("connection_id") or i): m for i, m in enumerate(frame.get("members") or [])}
+                channel._members = {member_key(m, i): m for i, m in enumerate(frame.get("members") or [])}
         elif kind == "presence_diff":
             channel = self._channels.get(str(frame.get("channel")))
             if channel:
                 channel._presence_diff(frame.get("joins") or [], frame.get("leaves") or [])
+        elif kind == "channel_closed":
+            channel = self._channels.get(str(frame.get("channel")))
+            if channel:
+                channel._removed(str(frame.get("reason") or "closed by the server"))
         elif kind == "query_result":
             live = self._queries.get(str(frame.get("id")))
             if live:
@@ -331,6 +335,14 @@ class Realtime:
             raise RealtimeError("ack_timeout", f"The server did not answer within {ACK_TIMEOUT:g} s.") from error
 
 
+def member_key(member: dict[str, Any], fallback: int) -> str:
+    """A presence member's identity: the server's ``presence_ref``, or an older ``id`` / ``connection_id``."""
+    for name in ("presence_ref", "id", "connection_id"):
+        if member.get(name):
+            return str(member[name])
+    return str(fallback)
+
+
 class Channel:
     """One channel: handlers by event, ``send``, presence, history, and async iteration over its messages."""
 
@@ -349,6 +361,14 @@ class Channel:
     def on(self, event: str | None, handler: Handler) -> Channel:
         """Call ``handler(message)`` for messages with this ``event`` (``None``: every message). Chainable."""
         self._handlers.setdefault(event, []).append(handler)
+        return self
+
+    def on_closed(self, handler: Callable[[str], Any]) -> Channel:
+        """Call ``handler(reason)`` when the server takes this channel away (a rule changed, or an administrator removed you).
+
+        A removed channel is not subscribed again after a reconnect; call :meth:`subscribe` if you want it back.
+        """
+        self._handlers.setdefault("__closed__", []).append(handler)  # type: ignore[arg-type]
         return self
 
     def on_presence(self, handler: Callable[[list[dict[str, Any]], list[dict[str, Any]]], Any]) -> Channel:
@@ -415,11 +435,20 @@ class Channel:
 
     def _presence_diff(self, joins: list[dict[str, Any]], leaves: list[dict[str, Any]]) -> None:
         for member in joins:
-            self._members[str(member.get("id") or member.get("connection_id") or len(self._members))] = member
+            self._members[member_key(member, len(self._members))] = member
         for member in leaves:
-            self._members.pop(str(member.get("id") or member.get("connection_id")), None)
+            self._members.pop(member_key(member, -1), None)
         for handler in self._handlers.get("__presence__", []):
             result = handler(joins, leaves)  # type: ignore[call-arg]
+            if inspect.isawaitable(result):
+                asyncio.ensure_future(result)
+
+    def _removed(self, reason: str) -> None:
+        self._wanted = False
+        self.subscribed = False
+        self._members.clear()
+        for handler in self._handlers.get("__closed__", []):
+            result = handler(reason)  # type: ignore[call-arg]
             if inspect.isawaitable(result):
                 asyncio.ensure_future(result)
 

@@ -48,7 +48,13 @@ class Server:
                 await socket.send(json.dumps({"type": "ack", "ref": ref, "ok": True, "id": frame["id"]}))
             elif kind in ("subscribe", "unsubscribe", "presence"):
                 await socket.send(json.dumps({"type": "ack", "ref": ref, "ok": True}))
-                if kind == "subscribe":
+                if kind == "subscribe" and socket not in self.sockets:
+                    self.sockets.append(socket)
+                if kind == "subscribe" and frame["channel"].startswith("room:"):
+                    # The server's own shape: members are keyed by ``presence_ref``.
+                    await socket.send(json.dumps({"type": "presence_state", "channel": frame["channel"], "members": [{"presence_ref": "p0", "user_id": "u0", "meta": {}}]}))
+                    await socket.send(json.dumps({"type": "presence_diff", "channel": frame["channel"], "joins": [{"presence_ref": "p1", "user_id": "u1", "meta": {}}], "leaves": [{"presence_ref": "p0", "user_id": "u0", "meta": {}}]}))
+                elif kind == "subscribe":
                     await socket.send(json.dumps({"type": "presence_state", "channel": frame["channel"], "members": [{"id": "u0", "meta": {"n": "Bo"}}]}))
                     await socket.send(json.dumps({"type": "presence_diff", "channel": frame["channel"], "joins": [{"id": "u1", "meta": {"n": "Cy"}}], "leaves": [{"id": "u0"}]}))
 
@@ -173,3 +179,25 @@ def test_sse_needs_a_channel_and_surfaces_errors(wire):
     wire.answer(httpx.Response(403, json={"detail": "not allowed"}))
     with pytest.raises(PawabaseError):
         list(pb.realtime.sse(["secret"]))
+
+
+async def test_presence_follows_the_servers_presence_ref(gateway):
+    _, url = gateway
+    async with AsyncPawabase(url, "pb_pk_test", project="P1") as pb:
+        room = pb.realtime.channel("room:a")
+        await room.subscribe()
+        await asyncio.sleep(0.1)
+        assert [m["user_id"] for m in room.presence_state()] == ["u1"]
+
+
+async def test_a_channel_the_server_removes_reports_why_and_stops(gateway):
+    server, url = gateway
+    async with AsyncPawabase(url, "pb_pk_test", project="P1") as pb:
+        room = pb.realtime.channel("room:b")
+        reasons = []
+        room.on_closed(reasons.append)
+        await room.subscribe()
+        await server.push({"type": "channel_closed", "channel": "room:b", "reason": "removed by an administrator"})
+        await asyncio.sleep(0.1)
+        assert reasons == ["removed by an administrator"]
+        assert room.subscribed is False and room._wanted is False
