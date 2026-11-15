@@ -94,9 +94,15 @@ class Backups(Service):
 
     def restore(
         self, backup: Mapping[str, Any], *, include: Sequence[str] | None = None, strategy: str = "merge", dry_run: bool = False, confirm: str | None = None,
+        safety_snapshot: bool | None = None,
     ) -> Any:
-        """Put a downloaded backup back. ``strategy="replace"`` first removes what the chosen parts hold and needs ``confirm`` = the environment's name."""
+        """Put a downloaded backup back. ``strategy="replace"`` first removes what the chosen parts hold and needs ``confirm`` = the environment's name.
+
+        A ``replace`` saves the environment as it is first (a "Before a restore" snapshot, its id in the answer's ``safety_snapshot``); pass
+        ``safety_snapshot`` to choose. A dry run also returns ``current``: what the environment holds now."""
         body: dict[str, Any] = {"backup": dict(backup), "strategy": strategy, "dry_run": dry_run}
+        if safety_snapshot is not None:
+            body["safety_snapshot"] = safety_snapshot
         if include is not None:
             body["include"] = list(include)
         if confirm:

@@ -73,6 +73,10 @@ def test_lifecycle_calls_are_project_wide_or_environment_scoped(wire, sk):
     assert wire.last.url.path == f"{BASE}/promote" and wire.json() == {"to": "staging", "include": ["flows"], "dry_run": False}
     sk.manage.backups.restore_snapshot("s1", strategy="replace", confirm="production")
     assert wire.last.url.path == f"{BASE}/snapshots/s1/restore" and wire.json()["confirm"] == "production" and wire.json()["safety_snapshot"] is True
+    sk.manage.backups.restore({"format": "pawabase.backup"}, strategy="replace", confirm="production")
+    assert wire.last.url.path == f"{BASE}/restore" and "safety_snapshot" not in wire.json()  # left out: the server decides
+    sk.manage.backups.restore({"format": "pawabase.backup"}, safety_snapshot=False)
+    assert wire.json()["safety_snapshot"] is False
     sk.manage.versions.release("v2", "staging", notes="n")
     assert wire.last.url.path == f"{BASE}/versions" and wire.json() == {"name": "v2", "from_env": "staging", "notes": "n"}
     sk.manage.versions.retire("v2")
