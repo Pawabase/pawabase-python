@@ -201,3 +201,16 @@ async def test_a_channel_the_server_removes_reports_why_and_stops(gateway):
         await asyncio.sleep(0.1)
         assert reasons == ["removed by an administrator"]
         assert room.subscribed is False and room._wanted is False
+
+
+async def test_the_connection_reports_its_status(gateway):
+    _, url = gateway
+    seen = []
+    async with AsyncPawabase(url, "pb_pk_test", project="P1") as pb:
+        assert pb.realtime.status == "idle"
+        stop = pb.realtime.on_status_change(seen.append)
+        await pb.realtime.channel("c").subscribe()
+        assert pb.realtime.status == "open"
+        await pb.realtime.close()
+        stop()
+    assert seen == ["connecting", "open", "closed"]

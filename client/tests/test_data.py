@@ -127,3 +127,15 @@ def test_paginate_false_asks_for_every_match_and_drops_page_settings(wire, pb):
     result = pb.from_("posts").per_page(5).page(3).paginate(False).execute()
     assert wire.query() == {"paginate": "false"}
     assert result.page is None and result.per_page is None and result.has_next is False and len(result) == 2
+
+
+def test_with_environment_keeps_the_project_and_key_and_starts_without_a_session(pb):
+    staging = pb.with_environment("staging")
+    try:
+        assert type(staging) is type(pb)
+        assert staging.project == pb.project and staging.api_key == pb.api_key
+        assert staging.environment == "staging" and staging.headers["x-environment"] == "staging"
+        assert pb.environment == "development"  # the original is untouched
+        assert staging.auth.session is None
+    finally:
+        staging.close()

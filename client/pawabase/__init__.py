@@ -27,10 +27,10 @@ import pkgutil
 # ``pawabase-functions`` installs its modules (``pawabase.functions``…) into this same package.
 __path__ = pkgutil.extend_path(__path__, __name__)
 
-from .auth import FileSessionStore, MemorySessionStore, Session, SessionStore, SignInResult  # noqa: E402
-from .client import AsyncPawabase, Pawabase  # noqa: E402
-from .data import Page, QueryError  # noqa: E402
-from .errors import (  # noqa: E402
+from .auth import FileSessionStore, MemorySessionStore, Session, SessionStore, SignInResult
+from .client import AsyncPawabase, Pawabase
+from .data import Page, QueryError
+from .errors import (
     AuthenticationError,
     ConfigError,
     ConflictError,
@@ -45,7 +45,7 @@ from .errors import (  # noqa: E402
     ValidationError,
 )
 
-__version__ = "0.10.1"
+__version__ = "0.10.2"
 __all__ = [
     "AsyncPawabase",
     "AuthenticationError",

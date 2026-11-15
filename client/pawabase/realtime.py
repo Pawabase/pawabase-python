@@ -24,7 +24,7 @@ import contextlib
 import inspect
 import json
 from collections.abc import AsyncIterator, Callable, Iterator
-from typing import Any
+from typing import Any, Self
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from . import _core
@@ -104,6 +104,29 @@ class Realtime:
         self._connecting: asyncio.Lock | None = None
         self._manual = False
         self.connection_id: str | None = None
+        self._status = "idle"
+        self._status_handlers: list[Callable[[str], Any]] = []
+
+    # ── the connection's state ───────────────────────────────────────────
+
+    @property
+    def status(self) -> str:
+        """``idle`` (never connected), ``connecting``, ``open``, ``reconnecting`` (lost, trying again) or ``closed``."""
+        return self._status
+
+    def on_status_change(self, handler: Callable[[str], Any]) -> Callable[[], None]:
+        """Call ``handler(status)`` whenever :attr:`status` changes. Returns a function that stops it."""
+        self._status_handlers.append(handler)
+        return lambda: self._status_handlers.remove(handler) if handler in self._status_handlers else None
+
+    def _set_status(self, status: str) -> None:
+        if status == self._status:
+            return
+        self._status = status
+        for handler in list(self._status_handlers):
+            result = handler(status)
+            if inspect.isawaitable(result):
+                asyncio.ensure_future(result)
 
     # ── over HTTP (both clients) ─────────────────────────────────────────
 
@@ -203,6 +226,8 @@ class Realtime:
             if self._socket is not None:
                 return
             self._manual = False
+            if self._status != "reconnecting":
+                self._set_status("connecting")
             socket = await websockets.connect(self._url(), open_timeout=10, ping_interval=None, max_size=16 * 1024 * 1024)
             welcome = json.loads(await asyncio.wait_for(socket.recv(), 10))
             if welcome.get("type") != "welcome":
@@ -212,6 +237,7 @@ class Realtime:
             self._socket = socket
             self._reader = asyncio.create_task(self._read(socket))
             self._beat = asyncio.create_task(self._heartbeat(socket))
+            self._set_status("open")
 
     async def close(self) -> None:
         """Close the connection and end every channel's iteration."""
@@ -221,6 +247,7 @@ class Realtime:
                 task.cancel()
         self._reader = self._beat = None
         socket, self._socket = self._socket, None
+        self._set_status("closed")
         self._fail_pending(RealtimeError("closed", "The realtime connection was closed."))
         for channel in self._channels.values():
             channel._end("disconnected")
@@ -254,11 +281,13 @@ class Realtime:
             self._socket = None
         self._fail_pending(RealtimeError("closed", "The realtime connection closed."))
         if self._manual or code in FATAL_CLOSE:
+            self._set_status("closed")
             for channel in self._channels.values():
                 channel._end(f"closed ({code})")
             for live in self._queries.values():
                 live._end()
             return
+        self._set_status("reconnecting")
         asyncio.create_task(self._reconnect())
 
     async def _reconnect(self) -> None:
@@ -330,7 +359,7 @@ class Realtime:
         try:
             await self._socket.send(json.dumps({**frame, "ref": ref}))
             return await asyncio.wait_for(future, ACK_TIMEOUT)
-        except asyncio.TimeoutError as error:
+        except TimeoutError as error:
             self._pending.pop(ref, None)
             raise RealtimeError("ack_timeout", f"The server did not answer within {ACK_TIMEOUT:g} s.") from error
 
@@ -538,11 +567,11 @@ class LiveQuery:
     def _end(self) -> None:
         self._queue.put_nowait(None)
 
-    async def __aenter__(self) -> LiveQuery:
+    async def __aenter__(self) -> Self:
         await self.start()
         return self
 
-    async def __aexit__(self, *exc: Any) -> None:
+    async def __aexit__(self, *exc: object) -> None:
         await self.stop()
 
     def __aiter__(self) -> LiveQuery:

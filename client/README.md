@@ -23,6 +23,9 @@ pb = Pawabase(
 A **publishable** key (`pb_pk_…`) is what an app holds: policies decide what it can do, and a signed-in user's token goes on top. A **secret** key
 (`pb_sk_…`) belongs on servers only: it bypasses policies and unlocks `pb.admin` and `pb.manage`.
 
+A key can reach several environments of its project. `pb.with_environment("staging")` is a client for another one with the same
+project and key, and its own session (a person signs in to one environment). Close it when you are done.
+
 ## Records
 
 ```python
@@ -109,6 +112,10 @@ async with AsyncPawabase(url, key, project=project) as pb:
     async for change in pb.realtime.channel("resource:posts"):   # live record changes, as you may read them
         print(change["event"], change["payload"]["record"])
 ```
+
+`pb.realtime.status` is `idle`, `connecting`, `open`, `reconnecting` or `closed`, and `pb.realtime.on_status_change(handler)` tells you when it
+changes. If the server takes a channel away (its rule changed, or an administrator removed you), `room.on_closed(handler)` is called with the
+reason and the channel is not rejoined by itself.
 
 Publishing, presence and history also work over plain HTTP on the blocking client: `pb.realtime.publish(...)`, `.presence(channel)`, `.history(channel)`.
 

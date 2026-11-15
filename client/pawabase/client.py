@@ -19,7 +19,7 @@ import asyncio
 import copy
 import time
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Self
 
 import httpx
 
@@ -111,6 +111,23 @@ class _Base:
     def env_segment(self) -> str:
         """How a keyless path names the environment: ``<project>.<environment>``, or the project alone for its default environment."""
         return f"{self.project}.{self.environment}" if self.environment else self.project
+
+    def with_environment(self, environment: str) -> Any:
+        """The same project and key, pointed at another environment by its name in the project (``"staging"``).
+
+        It is a separate client of the same kind, with its own connection and its own (empty) session: a person signs in to one
+        environment, so a session is never carried across. The key must reach that environment. Close it when you are done.
+        """
+        return type(self)(
+            self.url,
+            self.api_key,
+            project=self.project,
+            environment=environment,
+            timeout=self.timeout,
+            retries=self.retries,
+            auto_refresh=self.auto_refresh,
+            headers=self.extra_headers,
+        )
 
     def as_user(self, token: str | None, **headers: str) -> Any:
         """A view of this client that acts as one signed-in user: the same connection pool, ``Authorization: Bearer <token>`` on every request.
@@ -216,10 +233,10 @@ class Pawabase(_Base):
         if not self._borrowed:
             self._client.close()
 
-    def __enter__(self) -> Pawabase:
+    def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, *_: Any) -> None:
+    def __exit__(self, *_: object) -> None:
         self.close()
 
     def _call(
@@ -276,10 +293,10 @@ class AsyncPawabase(_Base):
             await self._client.aclose()
         await self.realtime.close()
 
-    async def __aenter__(self) -> AsyncPawabase:
+    async def __aenter__(self) -> Self:
         return self
 
-    async def __aexit__(self, *_: Any) -> None:
+    async def __aexit__(self, *_: object) -> None:
         await self.close()
 
     async def _call(  # type: ignore[override]
