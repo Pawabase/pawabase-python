@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.0
+
+- **Connect a product to Pawabase:** `pawabase.cloud` has `OAuth` (your registered app: `authorize`, `callback`, `refresh`, `client_credentials`,
+  `revoke`, `token_source`) and `Cloud` (one connection: `projects`, `organizations`, `marketplace`, API keys, `studio(ref)` for everything Studio
+  can do inside a project), each with an `Async` twin. PKCE, state checks, one-at-a-time refresh and rate-limit errors are handled for you.
+
 ## 0.11.0
 
 - **Bachs payments:** `pb.bachs.payments` (`create`, `get`, `list`, `wait_for`) takes payments through the Bachs integration installed in Studio, on

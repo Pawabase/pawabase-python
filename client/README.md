@@ -68,6 +68,8 @@ verification, password reset, linked identities, `pb.auth.mfa` (authenticator ap
 
 **Bachs payments.** With the Bachs integration installed (Studio → Integrations), `pb.bachs.payments.create(amount="5000.00", currency="NGN", success_url=...)` starts a payment and answers `checkout_url` and `reference`; `get`, `list` and `wait_for` read what Pawabase recorded after it asked Bachs. Every `create` carries an Idempotency-Key, so a retry never starts a second payment.
 
+**Connecting a product to Pawabase.** For a product other people connect to their own organization, `pawabase.cloud` has `OAuth` (your registered app) and `Cloud` (one connection). `OAuth.authorize(scopes=[...])` gives the address, `state` and PKCE verifier; `OAuth.callback(url, state=..., code_verifier=...)` checks the return and trades the code; `OAuth.token_source(tokens, on_refresh=save)` keeps tokens fresh, one refresh at a time. `Cloud(token=...)` then has `projects` (create, wait_until_running, pause, keys, install_app), `organizations`, `marketplace` and `studio(ref)` for everything Studio can do inside a project. `AsyncOAuth` and `AsyncCloud` are the same awaited.
+
 **Bot protection.** On a server, `pb.captcha.verify(pass_, action="contact")` checks the pass a form received. In an app with a publishable key, `pb.captcha.protect("signin")["pass"]` earns one; protected auth calls take it as `captcha_token=`.
 
 More ways in: guest sessions (`sign_in_anonymously()`, then `upgrade_anonymous(email=…, password=…)` keeps what the guest made), emailed codes
