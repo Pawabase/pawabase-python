@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.0
+
+- **Bachs payments:** `pb.bachs.payments` (`create`, `get`, `list`, `wait_for`) takes payments through the Bachs integration installed in Studio, on
+  `Pawabase` and `AsyncPawabase`. `create` carries an Idempotency-Key (yours, or made for you) and is retried safely; it answers `checkout_url`,
+  `reference` and `replayed`.
+
 ## 0.9.0
 
 - **Enterprise sign-in:** `pb.auth.find_sso(email=… | organization=…)` answers the company login that serves an address (or `None`), and

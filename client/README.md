@@ -66,6 +66,8 @@ request, and an expiring or rejected token is renewed with the refresh token. Al
 verification, password reset, linked identities, `pb.auth.mfa` (authenticator app, emailed codes, recovery codes), `pb.auth.sessions`, `pb.auth.devices`,
 `pb.auth.api_keys` (keys a user makes for themselves), `pb.auth.machine` and `pb.as_machine(...)` (a service or AI agent signing in with its client id and key), and `pb.auth.orgs` (organizations, members, invitations, teams, roles and permissions, email domains, security, activity, `joinable` / `join`).
 
+**Bachs payments.** With the Bachs integration installed (Studio → Integrations), `pb.bachs.payments.create(amount="5000.00", currency="NGN", success_url=...)` starts a payment and answers `checkout_url` and `reference`; `get`, `list` and `wait_for` read what Pawabase recorded after it asked Bachs. Every `create` carries an Idempotency-Key, so a retry never starts a second payment.
+
 **Bot protection.** On a server, `pb.captcha.verify(pass_, action="contact")` checks the pass a form received. In an app with a publishable key, `pb.captcha.protect("signin")["pass"]` earns one; protected auth calls take it as `captcha_token=`.
 
 More ways in: guest sessions (`sign_in_anonymously()`, then `upgrade_anonymous(email=…, password=…)` keeps what the guest made), emailed codes

@@ -14,6 +14,7 @@ Talk to a Pawabase environment from an app, a script or a server:
 * ``pb.auth``               accounts, sessions, MFA, devices, API keys, organizations (:mod:`pawabase.auth`)
 * ``pb.storage``            buckets, objects, signed links, image transforms (:mod:`pawabase.storage`)
 * ``pb.flows`` / ``pb.routes``  call what you have defined (:mod:`pawabase.callables`)
+* ``pb.bachs``             take payments with the Bachs integration         (:mod:`pawabase.bachs`)
 * ``pb.realtime``           channels, presence, live record changes        (:mod:`pawabase.realtime`)
 * ``pb.admin``              manage users with a secret key                  (:mod:`pawabase.admin`)
 * ``pb.manage``             configure the environment with a secret key     (:mod:`pawabase.manage`)
@@ -45,7 +46,7 @@ from .errors import (
     ValidationError,
 )
 
-__version__ = "0.10.3"
+__version__ = "0.11.0"
 __all__ = [
     "AsyncPawabase",
     "AuthenticationError",
