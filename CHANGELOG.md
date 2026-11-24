@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.13.0
+
+- **Dedicated projects:** `cloud.projects.create(name, type="dedicated", region="ng-lagos-alpha", size="standard")` makes a project whose
+  database runs on a server of its own (30 GB disk; its API and file storage stay shared). `region` is `ng-lagos-alpha` or `ng-lagos-falcon`;
+  `size` is nano … 5xlarge or standard (the default). For a shared project `region` is ignored.
+
 ## 0.12.0
 
 - **Connect a product to Pawabase:** `pawabase.cloud` has `OAuth` (your registered app: `authorize`, `callback`, `refresh`, `client_credentials`,

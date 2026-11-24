@@ -357,12 +357,17 @@ class Projects(_Resource):
         """One project, with its environments. Scope ``projects:read``."""
         return self._c.request("GET", f"/projects/{_seg(ref)}")
 
-    def create(self, name: str, *, description: str | None = None, region: str | None = None, app: str | None = None, values: dict[str, str] | None = None) -> Any:
+    def create(self, name: str, *, description: str | None = None, region: str | None = None, app: str | None = None, values: dict[str, str] | None = None,
+               type: str | None = None, size: str | None = None) -> Any:
         """Scope ``projects:write``, role member. Answers at once with the project in state ``creating``: use :meth:`wait_until_running`.
 
-        ``app`` is a marketplace app's slug, installed as soon as the project is running; ``values`` are the app's variables.
+        ``type`` is ``shared`` (default) or ``dedicated``: its database on a server of its own (30 GB disk; its API and file storage stay
+        shared), in ``region`` ``ng-lagos-alpha`` or ``ng-lagos-falcon``, of ``size`` nano … 5xlarge or standard (the default). ``region`` is
+        ignored for a shared project. ``app`` is a marketplace app's slug (shared projects only), installed as soon as the project is running;
+        ``values`` are the app's variables.
         """
-        return self._c.request("POST", "/projects", body=_core.compact({"name": name, "description": description, "region": region, "app": app, "values": values}))
+        body = {"name": name, "description": description, "region": region, "app": app, "values": values, "type": type, "size": size}
+        return self._c.request("POST", "/projects", body=_core.compact(body))
 
     def update(self, ref: str, *, name: str | None = None, description: str | None = None) -> Any:
         """Rename, or change the description (an empty one clears it). Scope ``projects:write``, role admin."""
