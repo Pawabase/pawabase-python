@@ -358,16 +358,24 @@ class Projects(_Resource):
         return self._c.request("GET", f"/projects/{_seg(ref)}")
 
     def create(self, name: str, *, description: str | None = None, region: str | None = None, app: str | None = None, values: dict[str, str] | None = None,
-               type: str | None = None, size: str | None = None) -> Any:
+               type: str | None = None, size: str | None = None, idempotency_key: str | None = None) -> Any:
         """Scope ``projects:write``, role member. Answers at once with the project in state ``creating``: use :meth:`wait_until_running`.
 
         ``type`` is ``shared`` (default) or ``dedicated``: its database on a server of its own (30 GB disk; its API and file storage stay
-        shared), in ``region`` ``ng-lagos-alpha`` or ``ng-lagos-falcon``, of ``size`` nano … 5xlarge or standard (the default). ``region`` is
+        shared), in a ``region`` code from :meth:`Cloud.regions`, of a ``size`` that region offers (``standard`` by default). ``region`` is
         ignored for a shared project. ``app`` is a marketplace app's slug (shared projects only), installed as soon as the project is running;
         ``values`` are the app's variables.
+
+        Send the same ``idempotency_key`` when you retry after a timeout or a network error: the retry answers with the project the first
+        attempt made instead of making a second one (kept 24 hours, per organization).
         """
         body = {"name": name, "description": description, "region": region, "app": app, "values": values, "type": type, "size": size}
-        return self._c.request("POST", "/projects", body=_core.compact(body))
+        headers = {"idempotency-key": idempotency_key} if idempotency_key else None
+        return self._c.request("POST", "/projects", body=_core.compact(body), headers=headers)
+
+    def retry(self, ref: str) -> Any:
+        """Set a ``failed`` project up again, from the step that failed; then :meth:`wait_until_running`. Role admin."""
+        return self._c.request("POST", f"/projects/{_seg(ref)}/retry")
 
     def update(self, ref: str, *, name: str | None = None, description: str | None = None) -> Any:
         """Rename, or change the description (an empty one clears it). Scope ``projects:write``, role admin."""
@@ -393,7 +401,7 @@ class Projects(_Resource):
         return self._c.request("POST", f"/projects/{_seg(ref)}/apps", body=_core.compact({"app": app, "values": values}))
 
     def list_keys(self, ref: str) -> Any:
-        """The project's API keys (never their secret values). Scope ``project:read``, role member."""
+        """The project's API keys. A publishable key's value is in ``key``; a secret key's never is (``None``). Scope ``project:read``, role member."""
         return _core.then(self._c.request("GET", f"/projects/{_seg(ref)}/api-keys"), lambda body: body["data"])
 
     def create_key(
@@ -422,7 +430,8 @@ class Projects(_Resource):
 
         def check(project: dict[str, Any]) -> None:
             if project["state"] != "running":
-                raise RuntimeError(f"Project {ref} ended up {project['state']}")
+                why = (project.get("failure") or {}).get("reason")
+                raise RuntimeError(f"Project {ref} ended up {project['state']}" + (f": {why}" if why else ""))
 
         return self._until(ref, lambda p: p["state"] != "creating", check, interval, timeout)
 
@@ -521,6 +530,11 @@ class _CloudBase:
         """What this token is: its organization, role, scopes, and who or what it acts for. Needs no scope. Call it right after connecting."""
         return self.request("GET", "/token")
 
+    def regions(self) -> Any:
+        """Where a dedicated project can run and the sizes each region offers: ``{"dedicated", "default_size", "disk_gb", "regions": [{"code",
+        "name", "available", "sizes"}]}``. Scope ``projects:read``."""
+        return self.request("GET", "/regions")
+
     @staticmethod
     def _answer(response: httpx.Response) -> Any:
         try:
@@ -531,11 +545,11 @@ class _CloudBase:
             raise CloudError(response.status_code, data if isinstance(data, dict) else {"error": "error", "message": response.reason_phrase})
         return data
 
-    def _send(self, method: str, path: str, token: str, body: Any, query: dict[str, Any] | None) -> Any:
-        headers = {"authorization": f"Bearer {token}", "accept": "application/json"}
+    def _send(self, method: str, path: str, token: str, body: Any, query: dict[str, Any] | None, extra: dict[str, str] | None = None) -> Any:
+        headers = {**(extra or {}), "authorization": f"Bearer {token}", "accept": "application/json"}
         return self._http.request(method, f"{self.base_url}/v1{path}", headers=headers, json=body, params=_core.compact(query or {}) or None)
 
-    def request(self, method: str, path: str, *, body: Any = None, query: dict[str, Any] | None = None) -> Any:
+    def request(self, method: str, path: str, *, body: Any = None, query: dict[str, Any] | None = None, headers: dict[str, str] | None = None) -> Any:
         """One call to ``/v1``. The answer is the parsed JSON (or ``None`` for an empty one); an error answer raises :class:`CloudError`.
         Use it for an endpoint this class has no method for yet."""
         raise NotImplementedError
@@ -551,8 +565,8 @@ class Cloud(_CloudBase):
     def _make(self, timeout: float) -> httpx.Client:
         return httpx.Client(timeout=timeout, transport=self._transport)
 
-    def request(self, method: str, path: str, *, body: Any = None, query: dict[str, Any] | None = None) -> Any:
-        return self._answer(self._send(method, path, self._token(), body, query))
+    def request(self, method: str, path: str, *, body: Any = None, query: dict[str, Any] | None = None, headers: dict[str, str] | None = None) -> Any:
+        return self._answer(self._send(method, path, self._token(), body, query, headers))
 
     def __enter__(self) -> Cloud:
         return self
@@ -572,11 +586,11 @@ class AsyncCloud(_CloudBase):
     def _make(self, timeout: float) -> httpx.AsyncClient:
         return httpx.AsyncClient(timeout=timeout, transport=self._transport)
 
-    async def request(self, method: str, path: str, *, body: Any = None, query: dict[str, Any] | None = None) -> Any:
+    async def request(self, method: str, path: str, *, body: Any = None, query: dict[str, Any] | None = None, headers: dict[str, str] | None = None) -> Any:
         token = self._token()
         if inspect.isawaitable(token):
             token = await token
-        return self._answer(await self._send(method, path, token, body, query))
+        return self._answer(await self._send(method, path, token, body, query, headers))
 
     async def __aenter__(self) -> AsyncCloud:
         return self

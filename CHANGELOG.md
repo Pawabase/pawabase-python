@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.14.0
+
+- **Regions:** `cloud.regions()` lists where a dedicated project can run and the sizes each region offers (`GET /v1/regions`).
+- **No duplicate projects on retry:** `cloud.projects.create(..., idempotency_key=key)` sends `Idempotency-Key`; a retry with the same key
+  answers with the project the first attempt made.
+- **Failed projects:** `cloud.projects.retry(ref)` sets a failed project up again; `wait_until_running` raises with `failure.reason`.
+- **Readable publishable keys:** `list_keys` returns a publishable key's value in `key` (server 0.32+); a secret key's is always `None`.
+- `Cloud.request` / `AsyncCloud.request` take `headers`.
+
 ## 0.13.0
 
 - **Dedicated projects:** `cloud.projects.create(name, type="dedicated", region="ng-lagos-alpha", size="standard")` makes a project whose

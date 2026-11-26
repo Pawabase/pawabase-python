@@ -174,3 +174,35 @@ def test_the_async_classes_are_the_same_awaited():
         assert calls[1].headers["authorization"] == "Bearer at2"
 
     asyncio.run(run())
+
+
+def test_create_sends_an_idempotency_key_and_retry_regions_and_failure_reasons_work():
+    def answer(request, i):
+        if request.url.path == "/v1/regions":
+            return httpx.Response(200, json={"dedicated": False, "default_size": "standard", "disk_gb": 30, "regions": []})
+        if request.url.path == "/v1/projects/p1":
+            return httpx.Response(200, json={"ref": "p1", "state": "failed", "failure": {"reason": "Setting the project up failed.", "retryable": True}})
+        return httpx.Response(201, json={"ref": "p1", "state": "creating"})
+
+    transport, calls = serve(answer)
+    cloud = Cloud(token="t", transport=transport)
+    cloud.projects.create("Shop", idempotency_key="shop-1")
+    cloud.projects.create("Shop")
+    cloud.projects.retry("p1")
+    assert cloud.regions()["default_size"] == "standard"
+    assert calls[0].headers["idempotency-key"] == "shop-1" and "idempotency-key" not in calls[1].headers
+    assert calls[0].headers["authorization"] == "Bearer t"
+    assert calls[2].method == "POST" and calls[2].url.path == "/v1/projects/p1/retry"
+    with pytest.raises(RuntimeError, match="ended up failed: Setting the project up failed"):
+        cloud.projects.wait_until_running("p1", interval=0.001)
+
+
+def test_the_async_client_sends_the_idempotency_key_too():
+    transport, calls = serve(lambda r, i: httpx.Response(201, json={"ref": "p1", "state": "creating"}))
+
+    async def go():
+        async with AsyncCloud(token="t", transport=transport) as cloud:
+            await cloud.projects.create("Shop", idempotency_key="k")
+
+    asyncio.run(go())
+    assert calls[0].headers["idempotency-key"] == "k"
